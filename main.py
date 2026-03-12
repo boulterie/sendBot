@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -7,9 +9,9 @@ from github import Github
 from datetime import datetime
 
 # Настройки
-TOKEN = "ВАШ_ТОКЕН_ТЕЛЕГРАМ_БОТА"
-GITHUB_TOKEN = "ВАШ_ТОКЕН_GITHUB"
-ADMIN_ID = 123456789  # Ваш Telegram ID
+TOKEN = os.getenv('BOT_TOKEN')
+GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+ADMIN_ID = os.getenv('ADMIN_ID')  # Ваш Telegram ID
 
 # Инициализация
 bot = Bot(token=TOKEN)
