@@ -5,91 +5,108 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import Message
-from github import Github
+from github import Github, InputFileContent
 from datetime import datetime
 
 # Настройки
 TOKEN = os.getenv('BOT_TOKEN')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-ADMIN_ID = os.getenv('ADMIN_ID')  # Ваш Telegram ID
 
 # Инициализация
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 g = Github(GITHUB_TOKEN)
 user = g.get_user()
 
-# Словарь для хранения привязанных пользователей {telegram_id: target_id}
-attached_users = {}
+# Хранилище привязанных пользователей
+active_chats = {}
 
 
-class GistManager:
+class ChatManager:
     @staticmethod
-    def find_gist_by_description(description: str):
-        """Поиск Gist по описанию"""
-        for gist in user.get_gists():
-            if gist.description == description:
-                return gist
-        return None
+    def find_chat_by_id(chat_id: str):
+        """Поиск чата по ID"""
+        try:
+            for gist in user.get_gists():
+                if gist.description == f"chat_{chat_id}":
+                    return gist
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка поиска: {e}")
+            return None
 
     @staticmethod
-    def create_gist_for_id(target_id: str):
-        """Создание нового Gist для ID"""
-        description = f"tg_chat_{target_id}"
-        filename = f"{target_id}.txt"
-
+    def create_chat(chat_id: str):
+        """Создание нового чата"""
+        filename = f"{chat_id}.txt"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        content = f"=== Чат для пользователя {target_id} ===\n"
-        content += f"Создан: {timestamp}\n"
-        content += "=" * 50 + "\n\n"
+        content = f"=== Чат создан: {timestamp} ===\n\n"
 
-        gist = user.create_gist(
-            public=False,
-            description=description,
-            files={filename: content}
-        )
-        return gist
+        try:
+            gist = user.create_gist(
+                public=False,
+                description=f"chat_{chat_id}",
+                files={filename: InputFileContent(content)}
+            )
+            logger.info(f"Чат создан для ID: {chat_id}")
+            return gist
+        except Exception as e:
+            logger.error(f"Ошибка создания: {e}")
+            return None
 
     @staticmethod
-    def add_message_to_gist(target_id: str, message: str):
-        """Добавление сообщения в Gist"""
-        description = f"tg_chat_{target_id}"
-        filename = f"{target_id}.txt"
-
-        # Ищем существующий Gist
-        gist = GistManager.find_gist_by_description(description)
+    def add_message(chat_id: str, message: str, sender: str):
+        """Добавление сообщения в чат"""
+        filename = f"{chat_id}.txt"
+        gist = ChatManager.find_chat_by_id(chat_id)
 
         if not gist:
-            gist = GistManager.create_gist_for_id(target_id)
+            gist = ChatManager.create_chat(chat_id)
+            if not gist:
+                return None
 
-        # Получаем текущее содержимое
-        current_content = gist.files[filename].content
+        try:
+            current = gist.files[filename].content
+            timestamp = datetime.now().strftime("%H:%M")
+            new_msg = f"[{timestamp}] {sender}: {message}\n"
 
-        # Добавляем новое сообщение
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_content = current_content + f"[{timestamp}] {message}\n"
+            gist.edit(files={filename: InputFileContent(current + new_msg)})
+            return gist
+        except Exception as e:
+            logger.error(f"Ошибка добавления сообщения: {e}")
+            return None
 
-        # Обновляем Gist
-        gist.edit(files={filename: new_content})
-        return gist
+    @staticmethod
+    def clear_chat(chat_id: str):
+        """Очистка чата"""
+        filename = f"{chat_id}.txt"
+        gist = ChatManager.find_chat_by_id(chat_id)
 
-
-def is_admin(user_id: int) -> bool:
-    return user_id == ADMIN_ID
+        if gist:
+            try:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                content = f"=== Чат очищен: {timestamp} ===\n\n"
+                gist.edit(files={filename: InputFileContent(content)})
+                return True
+            except Exception as e:
+                logger.error(f"Ошибка очистки: {e}")
+                return False
+        return False
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
-        "👋 Добро пожаловать!\n\n"
-        "📝 **Команды:**\n"
-        "/attach [id] - Привязать ID для получения сообщений\n"
-        "/myid - Показать ваш Telegram ID\n"
-        "/info - Информация о текущем ID\n"
-        "/help - Помощь\n\n"
-        "👑 **Команды администратора:**\n"
-        "/list_gists - Список всех Gist\n"
-        "/get_gist [id] - Информация о Gist",
+        "🔐 *Hidden Messenger*\n\n"
+        "📱 *Команды:*\n"
+        "▫️ /attach – создать новый чат\n"
+        "▫️ /myid – показать мой ID\n"
+        "▫️ /clear – очистить историю\n"
+        "▫️ /help – помощь\n\n"
+        "✨ *Все сообщения синхронизируются автоматически*",
         parse_mode="Markdown"
     )
 
@@ -97,203 +114,129 @@ async def cmd_start(message: Message):
 @dp.message(Command("help"))
 async def cmd_help(message: Message):
     help_text = (
-        "📚 **Как это работает:**\n\n"
-        "1️⃣ Отправьте `/attach user123` чтобы привязать ID\n"
-        "2️⃣ Бот создаст **отдельный Gist** с названием `user123`\n"
-        "3️⃣ Все ваши сообщения будут сохраняться в этот Gist\n"
-        "4️⃣ Получатель с таким же ID может читать их через ПК программу\n\n"
-        "📌 **Важно:**\n"
-        "• Каждый ID = отдельный Gist на GitHub\n"
-        "• Gist создается автоматически при первом сообщении\n"
-        "• Сообщения сохраняются с временными метками"
+        "📱 *Как пользоваться:*\n\n"
+        "1️⃣ *Шаг 1:* Отправьте /attach\n"
+        "2️⃣ *Шаг 2:* Скопируйте свой ID\n"
+        "3️⃣ *Шаг 3:* Введите ID в приложении\n"
+        "4️⃣ *Шаг 4:* Общайтесь! 💬\n\n"
+        "✨ *Все сообщения сохраняются автоматически*\n"
+        "🔄 *Синхронизация происходит в реальном времени*"
     )
     await message.answer(help_text, parse_mode="Markdown")
 
 
 @dp.message(Command("myid"))
 async def cmd_myid(message: Message):
-    await message.answer(f"🆔 **Ваш Telegram ID:** `{message.from_user.id}`", parse_mode="Markdown")
-
-
-@dp.message(Command("attach"))
-async def cmd_attach(message: Message):
-    args = message.text.split()
-
-    if len(args) < 2:
-        await message.answer(
-            "❌ **Ошибка:** Укажите ID!\n"
-            "Пример: `/attach user123`",
-            parse_mode="Markdown"
-        )
-        return
-
-    target_id = args[1]
     user_id = str(message.from_user.id)
-
-    # Сохраняем привязку
-    attached_users[user_id] = target_id
-
-    # Проверяем существование Gist
-    description = f"tg_chat_{target_id}"
-    existing_gist = GistManager.find_gist_by_description(description)
-
-    if existing_gist:
-        await message.answer(
-            f"📁 **Найден существующий Gist**\n"
-            f"ID: `{target_id}`\n"
-            f"URL: {existing_gist.html_url}",
-            parse_mode="Markdown"
-        )
-    else:
-        await message.answer(
-            f"📁 **Будет создан новый Gist**\n"
-            f"ID: `{target_id}`\n"
-            f"(при первом сообщении)",
-            parse_mode="Markdown"
-        )
-
     await message.answer(
-        f"✅ **Успешно привязано!**\n\n"
-        f"ID получателя: `{target_id}`\n"
-        f"Теперь все ваши сообщения будут сохраняться в Gist с этим ID.",
+        f"🆔 *Ваш ID:* `{user_id}`\n\n"
+        f"📋 *Нажмите на ID чтобы скопировать*",
         parse_mode="Markdown"
     )
 
 
-@dp.message(Command("info"))
-async def cmd_info(message: Message):
+@dp.message(Command("attach"))
+async def cmd_attach(message: Message):
     user_id = str(message.from_user.id)
 
-    if user_id not in attached_users:
+    # Проверяем существует ли уже чат
+    existing = ChatManager.find_chat_by_id(user_id)
+
+    if existing:
+        active_chats[user_id] = user_id
         await message.answer(
-            "❌ У вас нет привязанного ID.\n"
-            "Используйте `/attach [id]`",
+            f"🔓 *Чат уже существует!*\n\n"
+            f"🆔 *Ваш ID:* `{user_id}`\n\n"
+            f"✅ *Можете отправлять сообщения*",
             parse_mode="Markdown"
         )
-        return
+    else:
+        # Создаем новый чат
+        chat = ChatManager.create_chat(user_id)
+        if chat:
+            active_chats[user_id] = user_id
+            await message.answer(
+                f"✅ *Чат успешно создан!*\n\n"
+                f"🆔 *Ваш ID:* `{user_id}`\n\n"
+                f"📱 *Введите этот ID в приложении Hidden Messenger*\n\n"
+                f"✨ *Теперь все сообщения будут сохраняться*",
+                parse_mode="Markdown"
+            )
+        else:
+            await message.answer(
+                "❌ *Ошибка создания чата*\n\n"
+                "⚠️ Попробуйте позже или проверьте соединение",
+                parse_mode="Markdown"
+            )
 
-    target_id = attached_users[user_id]
-    description = f"tg_chat_{target_id}"
-    gist = GistManager.find_gist_by_description(description)
 
-    if gist:
-        files = list(gist.files.keys())
+@dp.message(Command("clear"))
+async def cmd_clear(message: Message):
+    user_id = str(message.from_user.id)
+
+    if ChatManager.clear_chat(user_id):
         await message.answer(
-            f"📊 **Информация о вашем Gist:**\n\n"
-            f"ID: `{target_id}`\n"
-            f"Файл: `{files[0]}`\n"
-            f"Создан: {gist.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"Обновлен: {gist.updated_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"URL: {gist.html_url}",
+            "🧹 *История чата очищена*\n\n"
+            "📝 *Можете начинать новый диалог*",
             parse_mode="Markdown"
         )
     else:
         await message.answer(
-            f"ℹ️ ID `{target_id}` привязан, но Gist еще не создан.\n"
-            f"Отправьте сообщение, чтобы создать Gist.",
+            "❌ *Ошибка*\n\n"
+            "Сначала создайте чат командой /attach",
             parse_mode="Markdown"
         )
-
-
-@dp.message(Command("list_gists"))
-async def cmd_list_gists(message: Message):
-    """Команда для администратора"""
-    if not is_admin(message.from_user.id):
-        await message.answer("❌ У вас нет прав на выполнение этой команды.")
-        return
-
-    try:
-        gists = list(user.get_gists())
-        if not gists:
-            await message.answer("📁 Нет ни одного Gist")
-            return
-
-        gist_list = []
-        for gist in gists[:10]:  # Показываем только первые 10
-            files = ", ".join(gist.files.keys())
-            gist_list.append(f"📄 `{gist.description}`\n   Файлы: {files}\n   [Ссылка]({gist.html_url})")
-
-        text = "**Последние Gist:**\n\n" + "\n\n".join(gist_list)
-        await message.answer(text, parse_mode="Markdown", disable_web_page_preview=True)
-    except Exception as e:
-        await message.answer(f"❌ Ошибка: {e}")
-
-
-@dp.message(Command("get_gist"))
-async def cmd_get_gist(message: Message):
-    """Команда для администратора"""
-    if not is_admin(message.from_user.id):
-        await message.answer("❌ У вас нет прав на выполнение этой команды.")
-        return
-
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("❌ Укажите ID. Пример: /get_gist user123")
-        return
-
-    target_id = args[1]
-    description = f"tg_chat_{target_id}"
-    gist = GistManager.find_gist_by_description(description)
-
-    if gist:
-        filename = f"{target_id}.txt"
-        content = gist.files[filename].content
-
-        if len(content) > 4000:
-            content = content[:4000] + "...\n\n(сообщение обрезано)"
-
-        await message.answer(
-            f"**Содержимое Gist для ID `{target_id}`:**\n\n```\n{content}\n```",
-            parse_mode="Markdown"
-        )
-    else:
-        await message.answer(f"❌ Gist для ID {target_id} не найден")
 
 
 @dp.message()
 async def handle_message(message: Message):
-    # Игнорируем команды
     if message.text and message.text.startswith('/'):
         return
 
     user_id = str(message.from_user.id)
 
-    # Проверяем, привязан ли пользователь
-    if user_id not in attached_users:
+    if user_id not in active_chats:
+        # Проверяем есть ли чат в GitHub
+        existing = ChatManager.find_chat_by_id(user_id)
+        if existing:
+            active_chats[user_id] = user_id
+        else:
+            await message.answer(
+                "❌ *Чат не найден*\n\n"
+                "📱 Создайте новый чат командой /attach",
+                parse_mode="Markdown"
+            )
+            return
+
+    # Отправляем сообщение
+    sender_name = message.from_user.first_name or "Пользователь"
+    chat = ChatManager.add_message(user_id, message.text, sender_name)
+
+    if chat:
+        # Отправляем подтверждение с эмодзи
         await message.answer(
-            "❌ **Сначала привяжите ID!**\n\n"
-            "Используйте команду:\n"
-            "`/attach [любой_id]`\n\n"
-            "Например: `/attach user123`",
+            "✅ *Отправлено*",
             parse_mode="Markdown"
         )
-        return
-
-    target_id = attached_users[user_id]
-
-    # Сохраняем сообщение в Gist
-    try:
-        gist = GistManager.add_message_to_gist(target_id, message.text)
-
-        # Отправляем подтверждение
-        preview = message.text[:50] + "..." if len(message.text) > 50 else message.text
+    else:
         await message.answer(
-            f"✅ **Сохранено в Gist!**\n\n"
-            f"ID: `{target_id}`\n"
-            f"Сообщение: \"{preview}\"\n"
-            f"Время: {datetime.now().strftime('%H:%M:%S')}\n\n"
-            f"🔗 {gist.html_url}",
-            parse_mode="Markdown",
-            disable_web_page_preview=True
+            "❌ *Ошибка отправки*\n\n"
+            "⚠️ Попробуйте еще раз",
+            parse_mode="Markdown"
         )
-    except Exception as e:
-        logging.error(f"Ошибка сохранения: {e}")
-        await message.answer("❌ **Ошибка** при сохранении сообщения. Попробуйте позже.", parse_mode="Markdown")
 
 
 async def main():
-    logging.basicConfig(level=logging.INFO)
-    print(f"🤖 Бот запущен. Администратор: {ADMIN_ID}")
+    logger.info("🤖 Hidden Messenger запущен")
+    logger.info("✨ Бот готов к работе")
+
+    # Проверка подключения к GitHub
+    try:
+        user.login
+        logger.info(f"✅ GitHub подключен: {user.login}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка GitHub: {e}")
+
     await dp.start_polling(bot)
 
 
