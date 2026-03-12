@@ -1,4 +1,5 @@
 python-dotenv>=1.0.0
 aiogram>=3.4.1
-websockets>=12.0
+PyGithub>=2.1.1
+aiofiles>=23.2.1
 requests>=2.31.0
