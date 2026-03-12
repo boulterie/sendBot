@@ -1,0 +1,5 @@
+aiogram>=3.4.1
+websockets>=12.0
+netifaces>=0.11.0
+requests>=2.31.0
+python-dotenv>=1.0.0
