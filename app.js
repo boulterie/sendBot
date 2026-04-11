@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 6712;  // Порт 6712
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
