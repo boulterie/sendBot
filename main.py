@@ -1,21 +1,33 @@
-import json
 import os
 import sqlite3
 import time
 import requests
 import hashlib
 import secrets
+import threading
+import base64
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env
+load_dotenv()
+
+# ========== КОНФИГУРАЦИЯ ==========
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+SERVER_URL = os.getenv('SERVER_URL')
+SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+PORT = int(os.getenv('PORT', 5000))
+
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не задан в .env файле")
+
+BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 app = Flask(__name__)
 CORS(app)
-
-# ========== КОНФИГУРАЦИЯ ==========
-BOT_TOKEN = os.getenv('BOT_TOKEN')  # Замените на ваш токен
-BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
-SERVER_URL = os.getenv('SERVER_URL')  # Замените на ваш публичный адрес
 
 
 # ========== ИНИЦИАЛИЗАЦИЯ БД ==========
@@ -51,6 +63,7 @@ def init_db():
 
     conn.commit()
     conn.close()
+    print("✅ База данных инициализирована")
 
 
 init_db()
@@ -69,7 +82,11 @@ def send_telegram_message(telegram_id, text):
     payload = {"chat_id": telegram_id, "text": text, "parse_mode": "HTML"}
     try:
         response = requests.post(url, json=payload, timeout=10)
-        return response.json()
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Ошибка отправки в Telegram: {response.status_code}")
+        return None
     except Exception as e:
         print(f"Ошибка отправки в Telegram: {e}")
         return None
@@ -79,7 +96,7 @@ def send_telegram_photo(telegram_id, image_data, caption=""):
     """Отправляет фото в Telegram"""
     url = f"{BOT_API_URL}/sendPhoto"
     files = {"photo": ("image.jpg", image_data)}
-    data = {"chat_id": telegram_id, "caption": caption}
+    data = {"chat_id": telegram_id, "caption": caption, "parse_mode": "HTML"}
     try:
         response = requests.post(url, data=data, files=files, timeout=30)
         return response.json()
@@ -128,7 +145,6 @@ def get_messages(chat_id, limit=100):
             "timestamp": row[4]
         }
         if row[5]:
-            import base64
             msg["image_data"] = base64.b64encode(row[5]).decode('ascii')
         messages.append(msg)
     conn.close()
@@ -146,15 +162,90 @@ def register_client(client_id, chat_id, telegram_id, username):
     conn.close()
 
 
-def notify_clients(chat_id, message_data):
-    """Оповещает всех клиентов в чате о новом сообщении"""
-    # В реальном приложении здесь может быть WebSocket или Server-Sent Events
-    # Для простоты клиенты сами опрашивают сервер
-    pass
+# ========== ОБРАБОТКА СООБЩЕНИЙ ИЗ TELEGRAM (POLLING) ==========
+last_update_id = 0
+
+
+def process_telegram_message(update):
+    """Обрабатывает одно сообщение из Telegram"""
+    global last_update_id
+
+    if 'message' not in update:
+        return
+
+    message = update['message']
+    telegram_id = message['chat']['id']
+    text = message.get('text', '')
+    username = message['from'].get('first_name', 'Пользователь')
+
+    # Обработка команд
+    if text == '/start':
+        send_telegram_message(telegram_id,
+                              "🤖 <b>Чат-бот для мессенджера</b>\n\n"
+                              "Этот бот пересылает сообщения из вашего клиента в Telegram.\n"
+                              "Используйте клиентское приложение для общения.\n\n"
+                              f"<i>Ваш ID в системе: {telegram_id}</i>\n\n"
+                              "📌 <b>Команды:</b>\n"
+                              "/start - показать это сообщение\n"
+                              "/chat &lt;ID_чата&gt; - показать последние сообщения из чата")
+
+    elif text.startswith('/chat '):
+        parts = text.split(maxsplit=1)
+        if len(parts) == 2:
+            chat_id = parts[1].strip()
+            messages = get_messages(chat_id, limit=10)
+            if messages:
+                response = f"📋 <b>Последние сообщения чата {chat_id}:</b>\n\n"
+                for msg in messages[-10:]:
+                    if msg['type'] == 'text':
+                        response += f"👤 <b>{msg['username']}</b>: {msg['content'][:100]}\n"
+                    elif msg['type'] == 'image':
+                        response += f"📷 <b>{msg['username']}</b>: [Изображение]\n"
+                    elif msg['type'] == 'system':
+                        response += f"ℹ️ {msg['content']}\n"
+                send_telegram_message(telegram_id, response[:4000])  # Telegram лимит
+            else:
+                send_telegram_message(telegram_id, f"❌ Чат {chat_id} пуст или не существует")
+
+    elif text == '/help':
+        send_telegram_message(telegram_id,
+                              "📖 <b>Справка:</b>\n\n"
+                              "/start - приветствие\n"
+                              "/chat &lt;ID_чата&gt; - показать последние сообщения\n"
+                              "/help - эта справка")
+
+
+def polling_loop():
+    """Основной цикл поллинга Telegram"""
+    global last_update_id
+
+    print("🔄 Запущен polling режим...")
+
+    while True:
+        try:
+            url = f"{BOT_API_URL}/getUpdates"
+            params = {"offset": last_update_id + 1, "timeout": 30}
+            response = requests.get(url, params=params, timeout=35)
+
+            if response.status_code == 200:
+                updates = response.json().get("result", [])
+
+                for update in updates:
+                    last_update_id = update["update_id"]
+                    process_telegram_message(update)
+            else:
+                print(f"Ошибка polling: {response.status_code}")
+
+        except requests.exceptions.Timeout:
+            pass  # Таймаут - нормально для long polling
+        except Exception as e:
+            print(f"Ошибка в polling: {e}")
+            time.sleep(5)
+
+        time.sleep(0.5)
 
 
 # ========== API ДЛЯ КЛИЕНТА ==========
-
 @app.route('/api/create_chat', methods=['POST'])
 def create_chat():
     """Создаёт новый чат"""
@@ -165,8 +256,8 @@ def create_chat():
     if not username:
         return jsonify({"error": "Username required"}), 400
 
-    # Генерируем ID чата
-    chat_id = secrets.token_hex(4)  # 8 символов
+    # Генерируем ID чата (8 символов)
+    chat_id = secrets.token_hex(4)
 
     # Сохраняем чат
     access_key = generate_access_key(chat_id)
@@ -194,7 +285,7 @@ def connect_chat():
     data = request.json
     chat_id = data.get('chat_id')
     username = data.get('username')
-    client_id = data.get('client_id')  # Уникальный ID клиента
+    client_id = data.get('client_id')
     access_key = data.get('access_key')
 
     # Проверяем существование чата
@@ -218,14 +309,13 @@ def connect_chat():
     return jsonify({
         "success": True,
         "chat_id": chat_id,
-        "messages": messages,
-        "telegram_bot": BOT_TOKEN.split(':')[0]  # Имя бота для отображения
+        "messages": messages
     })
 
 
 @app.route('/api/send_message', methods=['POST'])
 def send_message():
-    """Отправляет сообщение в чат"""
+    """Отправляет текстовое сообщение в чат"""
     data = request.json
     chat_id = data.get('chat_id')
     username = data.get('username')
@@ -256,7 +346,6 @@ def send_image():
     client_id = data.get('client_id')
     image_base64 = data.get('image_base64')
 
-    import base64
     image_data = base64.b64decode(image_base64)
 
     chat_info = get_chat_info(chat_id)
@@ -266,7 +355,7 @@ def send_image():
     # Сохраняем изображение
     save_message(chat_id, client_id, username, "image", "", image_data)
 
-    # Отправляем в Telegram
+    # Отправляем в Telegram, если пользователь подписан
     if chat_info['telegram_id']:
         send_telegram_photo(chat_info['telegram_id'], image_data,
                             f"📷 <b>{username}</b> в чате {chat_id}")
@@ -306,59 +395,33 @@ def health():
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
 
-# ========== TELEGRAM WEBHOOK ==========
-@app.route(f'/webhook/{BOT_TOKEN}', methods=['POST'])
-def telegram_webhook():
-    """Обрабатывает входящие сообщения от Telegram"""
-    update = request.get_json()
-
-    if not update or 'message' not in update:
-        return jsonify({"ok": True})
-
-    message = update['message']
-    telegram_id = message['chat']['id']
-    text = message.get('text', '')
-    username = message['from'].get('first_name', 'Пользователь')
-
-    # Обработка команд от пользователя в Telegram
-    if text == '/start':
-        send_telegram_message(telegram_id,
-                              "🤖 <b>Чат-бот для мессенджера</b>\n\n"
-                              "Этот бот пересылает сообщения из вашего клиента в Telegram.\n"
-                              "Используйте клиентское приложение для общения.\n\n"
-                              f"<i>Ваш ID в системе: {telegram_id}</i>")
-
-    elif text.startswith('/chat'):
-        # Пользователь запрашивает последние сообщения из чата
-        parts = text.split()
-        if len(parts) == 2:
-            chat_id = parts[1]
-            messages = get_messages(chat_id, limit=10)
-            if messages:
-                response = f"📋 <b>Последние сообщения чата {chat_id}:</b>\n\n"
-                for msg in messages[-10:]:
-                    response += f"👤 {msg['username']}: {msg['content'][:100]}\n"
-                send_telegram_message(telegram_id, response)
-            else:
-                send_telegram_message(telegram_id, f"❌ Чат {chat_id} пуст или не существует")
-
-    return jsonify({"ok": True})
-
-
-@app.route('/set_webhook', methods=['GET'])
-def set_webhook():
-    """Устанавливает вебхук (вызовите один раз)"""
-    webhook_url = f"{SERVER_URL}/webhook/{BOT_TOKEN}"
-    url = f"{BOT_API_URL}/setWebhook?url={webhook_url}"
-    response = requests.get(url)
-    return jsonify(response.json())
+@app.route('/api/info', methods=['GET'])
+def info():
+    return jsonify({
+        "status": "running",
+        "mode": "polling",
+        "bot_token": BOT_TOKEN[:10] + "...",
+        "server_url": SERVER_URL
+    })
 
 
 # ========== ЗАПУСК ==========
 if __name__ == '__main__':
-    print("🚀 Сервер запущен")
+    print("=" * 50)
+    print("🚀 Telegram Bot Server (Polling Mode)")
+    print("=" * 50)
     print(f"🤖 Bot token: {BOT_TOKEN[:10]}...")
-    print(f"📍 API доступен по адресу: {SERVER_URL}")
-    print("\n🔧 Установите вебхук, вызвав:")
-    print(f"   GET {SERVER_URL}/set_webhook")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print(f"📍 API URL: {SERVER_URL}")
+    print(f"🔧 Режим: POLLING (без вебхука)")
+    print(f"💾 База данных: chat.db")
+    print("=" * 50)
+    print("✅ Сервер готов к работе!")
+    print("📱 Напишите /start вашему боту в Telegram")
+    print("=" * 50)
+
+    # Запускаем polling в отдельном потоке
+    polling_thread = threading.Thread(target=polling_loop, daemon=True)
+    polling_thread.start()
+
+    # Запускаем Flask сервер
+    app.run(host='0.0.0.0', port=PORT, debug=DEBUG)
