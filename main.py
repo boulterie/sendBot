@@ -2,20 +2,20 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import secrets
 import time
+import threading
 
 app = Flask(__name__)
 CORS(app)
 
-# Корневой маршрут - чтобы не было 404
+# Корневой маршрут
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({
         "status": "ok",
-        "message": "Бот работает",
+        "message": "Бот работает на порту 6712",
         "time": time.time()
     })
 
-# API эндпоинты
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({"status": "ok", "time": time.time()})
@@ -24,6 +24,7 @@ def health():
 def info():
     return jsonify({
         "status": "running",
+        "port": 6712,
         "endpoints": ["/", "/api/health", "/api/info", "/api/create_chat"]
     })
 
@@ -38,10 +39,35 @@ def create_chat():
         "access_key": secrets.token_hex(8)
     })
 
+@app.route('/api/connect_chat', methods=['POST'])
+def connect_chat():
+    data = request.json
+    print(f"📨 Подключение к чату: {data}")
+    return jsonify({
+        "success": True,
+        "messages": []
+    })
+
+@app.route('/api/send_message', methods=['POST'])
+def send_message():
+    data = request.json
+    print(f"💬 Сообщение от {data.get('username')}: {data.get('text')}")
+    return jsonify({"success": True})
+
+@app.route('/api/send_image', methods=['POST'])
+def send_image():
+    data = request.json
+    print(f"📷 Изображение от {data.get('username')}")
+    return jsonify({"success": True})
+
+@app.route('/api/get_messages', methods=['POST'])
+def get_messages():
+    return jsonify({"success": True, "messages": []})
+
 if __name__ == '__main__':
     print("=" * 50)
-    print("🚀 БОТ ЗАПУЩЕН")
-    print("🌐 Адрес: http://apsendler.bothost.ru")
-    print("📡 Проверьте: http://apsendler.bothost.ru/api/health")
+    print(f"🚀 БОТ ЗАПУЩЕН НА ПОРТУ 6712")
+    print(f"🌐 Локальный адрес: http://localhost:6712")
+    print(f"📡 Проверьте: curl http://localhost:6712/api/health")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=80, debug=False)
+    app.run(host='0.0.0.0', port=6712, debug=False)
