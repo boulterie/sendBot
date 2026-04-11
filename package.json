@@ -1,5 +1,5 @@
 {
-  "name": "my-bot",
+  "name": "simple-bot",
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
