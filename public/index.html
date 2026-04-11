@@ -2,11 +2,19 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Bot Works</title>
+    <title>Bot работает</title>
 </head>
 <body>
     <h1>✅ Бот работает!</h1>
-    <p>Сервер запущен успешно.</p>
+    <p>Сервер успешно запущен на BotHost.</p>
+    <p>Порт: <span id="port"></span></p>
     <p>API: <a href="/api/health">/api/health</a></p>
+    <script>
+        fetch('/api/health')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('port').textContent = data.port;
+            });
+    </script>
 </body>
 </html>
