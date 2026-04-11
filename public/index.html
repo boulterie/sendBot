@@ -1,20 +1,61 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Bot работает</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Messenger Bot</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        button {
+            background: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h1>✅ Бот работает!</h1>
-    <p>Сервер успешно запущен на BotHost.</p>
-    <p>Порт: <span id="port"></span></p>
-    <p>API: <a href="/api/health">/api/health</a></p>
+    <div class="container">
+        <h1>🤖 Messenger Bot</h1>
+        <p>Сервер работает!</p>
+        <p>API: <code>/api/health</code></p>
+        <button id="checkBtn">Проверить соединение</button>
+        <p id="status"></p>
+    </div>
+
     <script>
-        fetch('/api/health')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('port').textContent = data.port;
-            });
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        document.getElementById('checkBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                document.getElementById('status').innerHTML = '✅ Сервер отвечает!<br>' + JSON.stringify(data);
+            } catch (error) {
+                document.getElementById('status').innerHTML = '❌ Ошибка: ' + error.message;
+            }
+        });
+
+        if (tg.initDataUnsafe.user) {
+            console.log('Пользователь:', tg.initDataUnsafe.user);
+        }
     </script>
 </body>
 </html>
