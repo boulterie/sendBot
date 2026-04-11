@@ -14,7 +14,7 @@ app = Flask(__name__)
 CORS(app)
 
 # ========== КОНФИГУРАЦИЯ ==========
-BOT_TOKEN = os.getenv('BOT_TOKEN')  # ВСТАВЬТЕ ВАШ ТОКЕН
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 BOT_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
@@ -29,21 +29,15 @@ def init_db():
                   username TEXT, type TEXT, content TEXT, timestamp INTEGER, image_data BLOB)''')
     conn.commit()
     conn.close()
-    print("✅ База данных готова")
 
 
 init_db()
 
 
-# ========== API ДЛЯ КЛИЕНТА ==========
+# ========== API ==========
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok", "time": datetime.now().isoformat()})
-
-
-@app.route('/api/info', methods=['GET'])
-def info():
-    return jsonify({"status": "running", "bot": "active"})
+    return jsonify({"status": "ok"})
 
 
 @app.route('/api/create_chat', methods=['POST'])
@@ -80,10 +74,6 @@ def connect_chat():
     if not result:
         conn.close()
         return jsonify({"error": "Чат не найден"}), 404
-
-    if access_key and result[0] != access_key:
-        conn.close()
-        return jsonify({"error": "Неверный ключ доступа"}), 403
 
     c.execute("SELECT username, type, content, timestamp FROM messages WHERE chat_id=? ORDER BY timestamp LIMIT 50",
               (chat_id,))
@@ -161,19 +151,16 @@ last_update_id = 0
 def send_telegram_message(chat_id, text):
     try:
         requests.post(f"{BOT_API_URL}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=10)
-    except Exception as e:
-        print(f"Ошибка: {e}")
+    except:
+        pass
 
 
 def polling_loop():
     global last_update_id
-    print("🔄 Telegram polling запущен...")
     while True:
         try:
-            url = f"{BOT_API_URL}/getUpdates"
-            params = {"offset": last_update_id + 1, "timeout": 20}
-            response = requests.get(url, params=params, timeout=25)
-
+            response = requests.get(f"{BOT_API_URL}/getUpdates", params={"offset": last_update_id + 1, "timeout": 20},
+                                    timeout=25)
             if response.status_code == 200:
                 for update in response.json().get("result", []):
                     last_update_id = update["update_id"]
@@ -182,20 +169,19 @@ def polling_loop():
                         chat_id = msg["chat"]["id"]
                         text = msg.get("text", "")
                         if text == "/start":
-                            send_telegram_message(chat_id, "✅ Бот работает! Используйте клиент для общения.")
+                            send_telegram_message(chat_id, "✅ Бот работает!")
         except:
             pass
         time.sleep(1)
 
 
-# ========== ЗАПУСК ==========
+# ========== ЗАПУСК НА СТАНДАРТНОМ ПОРТУ 80 ==========
 if __name__ == '__main__':
-    print("=" * 50)
-    print("🚀 ПРОСТОЙ БОТ ЗАПУЩЕН")
+    print("🚀 Бот запущен на порту 80")
+    print("🌐 Адрес для клиента: http://apsendler.bothost.ru")
     print("=" * 50)
 
-    # Запускаем polling
     threading.Thread(target=polling_loop, daemon=True).start()
 
-    # Запускаем сервер на ВСЕХ интерфейсах
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    # Порт 80 - стандартный HTTP порт, НЕ БЛОКИРУЕТСЯ
+    app.run(host='0.0.0.0', port=80, debug=False, use_reloader=False)
