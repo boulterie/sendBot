@@ -14,43 +14,84 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Путь к директории с данными
-const DATA_DIR = path.join(__dirname, 'app', 'data');
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // В продакшене сменить!
+// ============ ПУТИ К ДАННЫМ (В КОРНЕВОЙ ПАПКЕ data) ============
+const DATA_DIR = path.join(__dirname, 'data');  // ← теперь просто /data
+const KEYS_FILE = path.join(DATA_DIR, 'keys.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const DIALOGS_DIR = path.join(DATA_DIR, 'dialogs');
+
+// Пароль администратора
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+console.log('========================================');
+console.log('🔐 НАСТРОЙКИ СЕРВЕРА:');
+console.log(`   Порт: ${PORT}`);
+console.log(`   Папка данных: ${DATA_DIR}`);
+console.log(`   Пароль админа: ${ADMIN_PASSWORD === 'admin123' ? 'admin123 (по умолчанию)' : 'установлен'}`);
+console.log('========================================\n');
 
 // ============ ИНИЦИАЛИЗАЦИЯ ХРАНИЛИЩА ============
 async function initDataStorage() {
     try {
+        // Создаём основную папку data
         await fs.mkdir(DATA_DIR, { recursive: true });
+        console.log(`✅ Создана папка: ${DATA_DIR}`);
 
-        // Создаём файл с ключами
-        const keysFile = path.join(DATA_DIR, 'keys.json');
+        // Создаём папку для диалогов
+        await fs.mkdir(DIALOGS_DIR, { recursive: true });
+        console.log(`✅ Создана папка: ${DIALOGS_DIR}`);
+
+        // Создаём файл keys.json если нет
         try {
-            await fs.access(keysFile);
+            await fs.access(KEYS_FILE);
+            console.log(`✅ Найден файл: ${KEYS_FILE}`);
         } catch {
-            await fs.writeFile(keysFile, JSON.stringify({ keys: {} }, null, 2));
+            await fs.writeFile(KEYS_FILE, JSON.stringify({ keys: {} }, null, 2));
+            console.log(`✅ Создан файл: ${KEYS_FILE}`);
         }
 
-        // Создаём файл с пользователями (будет обновляться из ключей)
-        const usersFile = path.join(DATA_DIR, 'users.json');
+        // Создаём файл users.json если нет
         try {
-            await fs.access(usersFile);
+            await fs.access(USERS_FILE);
+            console.log(`✅ Найден файл: ${USERS_FILE}`);
         } catch {
-            await fs.writeFile(usersFile, JSON.stringify({ users: {} }, null, 2));
+            await fs.writeFile(USERS_FILE, JSON.stringify({ users: {} }, null, 2));
+            console.log(`✅ Создан файл: ${USERS_FILE}`);
         }
 
-        // Создаём директорию для диалогов
-        await fs.mkdir(path.join(DATA_DIR, 'dialogs'), { recursive: true });
+        // Проверяем сколько диалогов уже есть
+        const dialogFiles = await fs.readdir(DIALOGS_DIR);
+        console.log(`✅ Загружено диалогов: ${dialogFiles.length}`);
 
-        console.log('✅ Хранилище данных инициализировано');
+        console.log('\n📁 СТРУКТУРА ДАННЫХ:');
+        console.log(`   ${DATA_DIR}/`);
+        console.log(`   ├── keys.json (ключи доступа)`);
+        console.log(`   ├── users.json (пользователи)`);
+        console.log(`   └── dialogs/ (сообщения)\n`);
+
     } catch (error) {
         console.error('❌ Ошибка инициализации:', error);
     }
 }
 
-// ============ РАБОТА С КЛЮЧАМИ ============
+// ============ ФУНКЦИИ РАБОТЫ С ДАННЫМИ ============
+
+// Получение всех ключей
+async function getAllKeys() {
+    try {
+        const data = await fs.readFile(KEYS_FILE, 'utf-8');
+        return JSON.parse(data);
+    } catch {
+        return { keys: {} };
+    }
+}
+
+// Сохранение ключей
+async function saveKeys(keysData) {
+    await fs.writeFile(KEYS_FILE, JSON.stringify(keysData, null, 2));
+}
 
 // Генерация нового ключа
 function generateKey() {
@@ -63,9 +104,7 @@ function generateKey() {
 
 // Создание ключа
 async function createKey(daysValid) {
-    const keysFile = path.join(DATA_DIR, 'keys.json');
-    const data = await fs.readFile(keysFile, 'utf-8');
-    const keysData = JSON.parse(data);
+    const keysData = await getAllKeys();
 
     const key = generateKey();
     const now = Date.now();
@@ -81,15 +120,14 @@ async function createKey(daysValid) {
         user_id: null
     };
 
-    await fs.writeFile(keysFile, JSON.stringify(keysData, null, 2));
+    await saveKeys(keysData);
+    console.log(`🎫 Создан ключ: ${key} (${daysValid} дней)`);
     return key;
 }
 
 // Активация ключа
 async function activateKey(key, username) {
-    const keysFile = path.join(DATA_DIR, 'keys.json');
-    const data = await fs.readFile(keysFile, 'utf-8');
-    const keysData = JSON.parse(data);
+    const keysData = await getAllKeys();
 
     if (!keysData.keys[key]) {
         return { success: false, error: 'Ключ не найден' };
@@ -101,7 +139,7 @@ async function activateKey(key, username) {
         return { success: false, error: 'Ключ уже активирован' };
     }
 
-    // Генерируем уникальный ID пользователя (4 символа)
+    // Генерируем уникальный ID
     let userId;
     let isUnique = false;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -111,7 +149,6 @@ async function activateKey(key, username) {
         for (let i = 0; i < 4; i++) {
             userId += chars[Math.floor(Math.random() * chars.length)];
         }
-        // Проверяем, не занят ли ID
         let idExists = false;
         for (const k in keysData.keys) {
             if (keysData.keys[k].user_id === userId && keysData.keys[k].activated) {
@@ -131,29 +168,16 @@ async function activateKey(key, username) {
     keyData.username = username;
     keyData.user_id = userId;
 
-    await fs.writeFile(keysFile, JSON.stringify(keysData, null, 2));
+    await saveKeys(keysData);
 
-    // Обновляем users.json для совместимости
-    const usersFile = path.join(DATA_DIR, 'users.json');
-    const usersData = await fs.readFile(usersFile, 'utf-8');
-    const users = JSON.parse(usersData);
-    users.users[userId] = {
-        id: userId,
-        username: username,
-        key: key,
-        created_at: now,
-        expires_at: expiresAt
-    };
-    await fs.writeFile(usersFile, JSON.stringify(users, null, 2));
+    console.log(`✅ Активирован ключ: ${key} -> ${username} (${userId})`);
 
     return { success: true, userId: userId, expiresAt: expiresAt };
 }
 
-// Проверка ключа при входе
+// Проверка ключа
 async function checkKey(key, username) {
-    const keysFile = path.join(DATA_DIR, 'keys.json');
-    const data = await fs.readFile(keysFile, 'utf-8');
-    const keysData = JSON.parse(data);
+    const keysData = await getAllKeys();
 
     if (!keysData.keys[key]) {
         return { success: false, error: 'Ключ не найден' };
@@ -181,33 +205,10 @@ async function checkKey(key, username) {
     };
 }
 
-// Получение всех ключей (для админки)
-async function getAllKeys() {
-    const keysFile = path.join(DATA_DIR, 'keys.json');
-    const data = await fs.readFile(keysFile, 'utf-8');
-    const keysData = JSON.parse(data);
-    return keysData.keys;
-}
-
-// Удаление ключа
-async function deleteKey(key) {
-    const keysFile = path.join(DATA_DIR, 'keys.json');
-    const data = await fs.readFile(keysFile, 'utf-8');
-    const keysData = JSON.parse(data);
-
-    if (!keysData.keys[key]) {
-        return { success: false, error: 'Ключ не найден' };
-    }
-
-    delete keysData.keys[key];
-    await fs.writeFile(keysFile, JSON.stringify(keysData, null, 2));
-    return { success: true };
-}
-
 // Получение диалога
 async function getDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
-    const dialogFile = path.join(DATA_DIR, 'dialogs', `${dialogId}.json`);
+    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
     try {
         const data = await fs.readFile(dialogFile, 'utf-8');
         return JSON.parse(data);
@@ -219,8 +220,23 @@ async function getDialog(user1, user2) {
 // Сохранение диалога
 async function saveDialog(user1, user2, dialog) {
     const dialogId = [user1, user2].sort().join('_');
-    const dialogFile = path.join(DATA_DIR, 'dialogs', `${dialogId}.json`);
+    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
     await fs.writeFile(dialogFile, JSON.stringify(dialog, null, 2));
+    console.log(`💾 Сохранён диалог: ${dialogId} (${dialog.messages.length} сообщений)`);
+}
+
+// Удаление ключа
+async function deleteKey(key) {
+    const keysData = await getAllKeys();
+
+    if (!keysData.keys[key]) {
+        return { success: false, error: 'Ключ не найден' };
+    }
+
+    delete keysData.keys[key];
+    await saveKeys(keysData);
+    console.log(`🗑️ Удалён ключ: ${key}`);
+    return { success: true };
 }
 
 // ============ API ЭНДПОИНТЫ ============
@@ -228,6 +244,7 @@ async function saveDialog(user1, user2, dialog) {
 // Админ-логин
 app.post('/api/admin/login', (req, res) => {
     const { password } = req.body;
+
     if (password === ADMIN_PASSWORD) {
         res.json({ success: true });
     } else {
@@ -235,13 +252,13 @@ app.post('/api/admin/login', (req, res) => {
     }
 });
 
-// Получение всех ключей (админ)
+// Получение всех ключей
 app.get('/api/admin/keys', async (req, res) => {
-    const keys = await getAllKeys();
-    res.json({ keys });
+    const keysData = await getAllKeys();
+    res.json({ keys: keysData.keys });
 });
 
-// Генерация ключа (админ)
+// Генерация ключа
 app.post('/api/admin/generate_key', async (req, res) => {
     const { days } = req.body;
     const daysNum = parseInt(days);
@@ -254,7 +271,7 @@ app.post('/api/admin/generate_key', async (req, res) => {
     res.json({ success: true, key: key, days: daysNum });
 });
 
-// Удаление ключа (админ)
+// Удаление ключа
 app.delete('/api/admin/delete_key/:key', async (req, res) => {
     const { key } = req.params;
     const result = await deleteKey(key);
@@ -266,7 +283,7 @@ app.delete('/api/admin/delete_key/:key', async (req, res) => {
     }
 });
 
-// Регистрация/вход по ключу
+// Регистрация/вход
 app.post('/api/register', async (req, res) => {
     const { username, key } = req.body;
 
@@ -292,7 +309,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Активация ключа (первая регистрация)
+// Активация ключа
 app.post('/api/activate', async (req, res) => {
     const { username, key } = req.body;
 
@@ -321,16 +338,14 @@ app.post('/api/activate', async (req, res) => {
 // Поиск пользователя
 app.post('/api/find_user', async (req, res) => {
     const { username, userId } = req.body;
-
     const keysData = await getAllKeys();
-    let foundUser = null;
 
-    for (const [key, data] of Object.entries(keysData)) {
+    let foundUser = null;
+    for (const [key, data] of Object.entries(keysData.keys)) {
         if (data.activated && data.username === username && data.user_id === userId) {
             foundUser = {
                 id: data.user_id,
-                username: data.username,
-                key: key
+                username: data.username
             };
             break;
         }
@@ -362,7 +377,7 @@ app.post('/api/send', async (req, res) => {
     const dialog = await getDialog(from, to);
     dialog.messages.push(message);
 
-    // Ограничиваем историю 100 сообщениями
+    // Ограничиваем 100 сообщениями
     if (dialog.messages.length > 100) {
         dialog.messages = dialog.messages.slice(-100);
     }
@@ -378,13 +393,13 @@ app.get('/api/messages/:userId', async (req, res) => {
     const lastId = parseInt(req.query.last_id) || 0;
 
     try {
-        const dialogFiles = await fs.readdir(path.join(DATA_DIR, 'dialogs'));
+        const dialogFiles = await fs.readdir(DIALOGS_DIR);
         const newMessages = [];
 
         for (const file of dialogFiles) {
             const [user1, user2] = file.replace('.json', '').split('_');
             if (user1 === userId || user2 === userId) {
-                const dialogPath = path.join(DATA_DIR, 'dialogs', file);
+                const dialogPath = path.join(DIALOGS_DIR, file);
                 const data = await fs.readFile(dialogPath, 'utf-8');
                 const dialog = JSON.parse(data);
 
@@ -406,7 +421,7 @@ app.get('/api/user/:userId', async (req, res) => {
     const { userId } = req.params;
     const keysData = await getAllKeys();
 
-    for (const [key, data] of Object.entries(keysData)) {
+    for (const [key, data] of Object.entries(keysData.keys)) {
         if (data.activated && data.user_id === userId) {
             return res.json({
                 success: true,
@@ -424,17 +439,20 @@ app.get('/api/user/:userId', async (req, res) => {
 // Статус сервера
 app.get('/health', async (req, res) => {
     const keysData = await getAllKeys();
-    const activatedCount = Object.values(keysData).filter(k => k.activated).length;
+    const activatedCount = Object.values(keysData.keys).filter(k => k.activated).length;
+    const dialogFiles = await fs.readdir(DIALOGS_DIR).catch(() => []);
 
     res.json({
         status: 'ok',
-        total_keys: Object.keys(keysData).length,
+        data_dir: DATA_DIR,
+        total_keys: Object.keys(keysData.keys).length,
         activated_keys: activatedCount,
+        dialogs_count: dialogFiles.length,
         timestamp: Date.now()
     });
 });
 
-// Главная страница - админ панель
+// Главная страница
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
