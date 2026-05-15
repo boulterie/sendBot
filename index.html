@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Messenger Proxy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .status-card {
+            background: #f7f9fc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e1e4e8;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .status-value {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .clients-list {
+            background: #f7f9fc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .clients-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .client-item {
+            padding: 8px 0;
+            color: #666;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        .info {
+            background: #e7f3ff;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            margin-top: 20px;
+            font-size: 13px;
+            border-radius: 4px;
+        }
+
+        .info code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 Telegram Messenger Proxy</h1>
+        <div class="subtitle">WebSocket прокси сервер для мессенджера</div>
+
+        <div class="status-card">
+            <div class="status-item">
+                <span class="status-label">🟢 Статус сервера:</span>
+                <span class="status-value" id="serverStatus">
+                    <span class="loading"></span> Проверка...
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">🤖 BOT Token:</span>
+                <span class="status-value" id="botTokenStatus">—</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">🔌 WebSocket порт:</span>
+                <span class="status-value">3000</span>
+            </div>
+        </div>
+
+        <div class="clients-list">
+            <div class="clients-title">👥 Подключенные клиенты:</div>
+            <div id="clientsList">
+                <div class="client-item">Загрузка...</div>
+            </div>
+            <button onclick="refreshData()">🔄 Обновить</button>
+        </div>
+
+        <div class="info">
+            💡 <strong>Для разработчиков:</strong><br>
+            • WebSocket URL: <code>ws://msgsendlerpro.bothost.tech:3000</code><br>
+            • Health check: <code>https://msgsendlerpro.bothost.tech/health</code><br>
+            • Webhook URL: <code>https://msgsendlerpro.bothost.tech/webhook/YOUR_TOKEN</code>
+        </div>
+
+        <div class="footer">
+            Версия 1.0.0 | Работает 24/7
+        </div>
+    </div>
+
+    <script>
+        async function fetchData() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+
+                // Статус сервера
+                const serverStatusEl = document.getElementById('serverStatus');
+                if (data.status === 'ok') {
+                    serverStatusEl.innerHTML = '<span class="badge online">✅ Онлайн</span>';
+                } else {
+                    serverStatusEl.innerHTML = '<span class="badge offline">❌ Оффлайн</span>';
+                }
+
+                // Статус BOT_TOKEN
+                const botStatusEl = document.getElementById('botTokenStatus');
+                if (data.bot_token_configured) {
+                    botStatusEl.innerHTML = '<span class="badge online">✅ Настроен</span>';
+                } else {
+                    botStatusEl.innerHTML = '<span class="badge offline">❌ Не настроен</span>';
+                }
+
+                // Список клиентов (если API отдает список)
+                const clientsListEl = document.getElementById('clientsList');
+                if (data.clients_connected > 0) {
+                    clientsListEl.innerHTML = `
+                        <div class="client-item">📱 Активных клиентов: ${data.clients_connected}</div>
+                        <div class="client-item" style="color: #999; font-size: 11px; padding-top: 5px;">
+                            (Список клиентов скрыт для безопасности)
+                        </div>
+                    `;
+                } else {
+                    clientsListEl.innerHTML = '<div class="client-item">😴 Нет активных клиентов</div>';
+                }
+
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                document.getElementById('serverStatus').innerHTML = '<span class="badge offline">❌ Ошибка подключения</span>';
+                document.getElementById('clientsList').innerHTML = '<div class="client-item">⚠️ Не удалось подключиться к серверу</div>';
+            }
+        }
+
+        function refreshData() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Загрузка...';
+            btn.disabled = true;
+
+            fetchData().finally(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            });
+        }
+
+        // Автообновление каждые 10 секунд
+        fetchData();
+        setInterval(fetchData, 10000);
+    </script>
+</body>
+</html>
