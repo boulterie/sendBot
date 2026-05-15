@@ -11,89 +11,168 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+// Хранилище подключенных клиентов (userId -> WebSocket)
 const clients = new Map();
+
+// Middleware
 app.use(express.json());
 
+// Берем токен из переменных окружения (для Telegram, если нужен)
 const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) {
-    console.error('❌ ОШИБКА: BOT_TOKEN не найден в переменных окружения!');
-    process.exit(1);
-}
+
+console.log('🚀 Запуск сервера мессенджера...');
+console.log(`🤖 BOT_TOKEN: ${BOT_TOKEN ? 'настроен' : 'не настроен (Telegram не будет работать)'}`);
 
 // ============ СТАТИЧЕСКИЕ СТРАНИЦЫ ============
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ============ WEBHOOK ============
-app.post(`/webhook/${BOT_TOKEN}`, (req, res) => {
-    const { message, edited_message } = req.body;
-    const msg = message || edited_message;
+// ============ WEBHOOK ДЛЯ TELEGRAM (опционально) ============
+if (BOT_TOKEN) {
+    app.post(`/webhook/${BOT_TOKEN}`, (req, res) => {
+        console.log('📨 Получен webhook от Telegram');
+        const { message } = req.body;
 
-    if (msg && msg.text) {
-        const userId = msg.from.id.toString();
-        const chatId = msg.chat.id.toString();
-        const text = msg.text;
-        const username = msg.from.username || msg.from.first_name;
+        if (message && message.text) {
+            const userId = message.from.id.toString();
+            const text = message.text;
+            const username = message.from.username || message.from.first_name;
 
-        console.log(`📝 ${username} (${userId}): ${text}`);
+            console.log(`📝 Telegram от ${username} (${userId}): ${text}`);
 
-        const clientWs = clients.get(userId);
-
-        if (clientWs && clientWs.readyState === 1) {
-            clientWs.send(JSON.stringify({
-                type: 'message',
-                from: {
-                    id: userId,
-                    username: username,
-                    name: msg.from.first_name
-                },
-                chatId: chatId,
-                text: text,
-                timestamp: Date.now()
-            }));
-            console.log(`✅ Переслано клиенту ${userId}`);
-        } else {
-            console.log(`⚠️ Клиент ${userId} не в сети`);
+            // Ищем клиента с таким ID
+            const clientWs = clients.get(userId);
+            if (clientWs && clientWs.readyState === 1) {
+                clientWs.send(JSON.stringify({
+                    type: 'message',
+                    from: {
+                        id: userId,
+                        username: username,
+                        name: message.from.first_name
+                    },
+                    text: text,
+                    timestamp: Date.now()
+                }));
+                console.log(`✅ Переслано клиенту ${userId}`);
+            } else {
+                console.log(`⚠️ Клиент ${userId} не в сети`);
+            }
         }
-    }
 
-    res.sendStatus(200);
-});
+        res.sendStatus(200);
+    });
+}
 
 // ============ HEALTH CHECK ============
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        bot_token_configured: !!BOT_TOKEN,
         clients_connected: clients.size,
+        clients_list: Array.from(clients.keys()),
+        bot_token_configured: !!BOT_TOKEN,
+        uptime: process.uptime(),
         timestamp: Date.now()
     });
 });
 
-// ============ WEBSOCKET ============
+// ============ WEBSOCKET ДЛЯ КЛИЕНТОВ ============
 wss.on('connection', (ws, req) => {
-    console.log('🔌 Новый клиент подключился');
+    console.log(`🔌 Новое WebSocket подключение от ${req.socket.remoteAddress}`);
     let userId = null;
 
     ws.on('message', (data) => {
         try {
             const message = JSON.parse(data.toString());
+            console.log(`📡 Получено сообщение от ${userId || 'неизвестно'}:`, message.type);
 
-            if (message.type === 'auth') {
-                userId = message.userId;
-                clients.set(userId, ws);
-                console.log(`✅ Авторизован клиент ${userId}`);
+            switch (message.type) {
+                case 'auth':
+                    // Аутентификация клиента
+                    userId = message.userId;
+                    clients.set(userId, ws);
+                    console.log(`✅ Авторизован клиент: ${userId}`);
+                    console.log(`📊 Всего клиентов онлайн: ${clients.size}`);
 
-                ws.send(JSON.stringify({
-                    type: 'auth_success',
-                    userId: userId
-                }));
-            } else if (message.type === 'send_message') {
-                sendToTelegram(message.chatId, message.text);
+                    // Отправляем подтверждение
+                    ws.send(JSON.stringify({
+                        type: 'auth_success',
+                        userId: userId,
+                        message: 'Вы успешно подключены к серверу'
+                    }));
+                    break;
+
+                case 'send_message':
+                    // Отправка сообщения другому клиенту
+                    const targetId = message.targetId;
+                    const text = message.text;
+                    const timestamp = message.timestamp || Date.now();
+
+                    console.log(`💬 ${userId} -> ${targetId}: ${text.substring(0, 50)}`);
+
+                    // Ищем получателя
+                    const targetWs = clients.get(targetId);
+
+                    if (targetWs && targetWs.readyState === 1) {
+                        // Отправляем сообщение получателю
+                        targetWs.send(JSON.stringify({
+                            type: 'message',
+                            from: {
+                                id: userId,
+                                username: userId
+                            },
+                            text: text,
+                            timestamp: timestamp
+                        }));
+                        console.log(`✅ Сообщение доставлено ${targetId}`);
+
+                        // Отправляем отправителю подтверждение
+                        ws.send(JSON.stringify({
+                            type: 'message_delivered',
+                            targetId: targetId,
+                            timestamp: timestamp
+                        }));
+                    } else {
+                        console.log(`❌ Клиент ${targetId} не в сети`);
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            error: `Клиент ${targetId} не в сети`,
+                            targetId: targetId
+                        }));
+                    }
+                    break;
+
+                case 'ping':
+                    // Проверка соединения
+                    ws.send(JSON.stringify({
+                        type: 'pong',
+                        timestamp: Date.now()
+                    }));
+                    break;
+
+                case 'get_online_users':
+                    // Получить список онлайн пользователей
+                    const onlineUsers = Array.from(clients.keys());
+                    ws.send(JSON.stringify({
+                        type: 'online_users',
+                        users: onlineUsers,
+                        count: onlineUsers.length
+                    }));
+                    break;
+
+                default:
+                    console.log(`⚠️ Неизвестный тип сообщения: ${message.type}`);
+                    ws.send(JSON.stringify({
+                        type: 'error',
+                        error: `Неизвестный тип: ${message.type}`
+                    }));
             }
         } catch (err) {
-            console.error('❌ Ошибка:', err.message);
+            console.error(`❌ Ошибка обработки сообщения: ${err.message}`);
+            ws.send(JSON.stringify({
+                type: 'error',
+                error: 'Ошибка обработки сообщения'
+            }));
         }
     });
 
@@ -101,34 +180,54 @@ wss.on('connection', (ws, req) => {
         if (userId) {
             clients.delete(userId);
             console.log(`🔌 Клиент ${userId} отключился`);
+            console.log(`📊 Осталось клиентов: ${clients.size}`);
+        }
+    });
+
+    ws.on('error', (err) => {
+        console.error(`❌ WebSocket ошибка: ${err.message}`);
+        if (userId) {
+            clients.delete(userId);
         }
     });
 });
 
-async function sendToTelegram(chatId, text) {
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: chatId,
-                text: text
-            })
-        });
-
-        await response.json();
-        console.log(`📤 Отправлено в Telegram chat ${chatId}`);
-    } catch (err) {
-        console.error(`❌ Ошибка отправки: ${err.message}`);
-    }
-}
-
+// ============ ЗАПУСК СЕРВЕРА ============
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`\n🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`🌐 Главная страница: https://msgsendlerpro.bothost.tech/`);
-    console.log(`📊 Health check: https://msgsendlerpro.bothost.tech/health`);
-    console.log(`🔌 WebSocket: ws://msgsendlerpro.bothost.tech:${PORT}\n`);
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`🚀 Сервер мессенджера запущен!`);
+    console.log(`${'='.repeat(50)}`);
+    console.log(`📡 HTTP порт: ${PORT}`);
+    console.log(`🔌 WebSocket: ws://msgsendlerpro.bothost.tech:${PORT}`);
+    console.log(`📊 Health check: http://msgsendlerpro.bothost.tech:${PORT}/health`);
+    console.log(`🌐 Главная страница: http://msgsendlerpro.bothost.tech:${PORT}`);
+
+    if (BOT_TOKEN) {
+        console.log(`🤖 Telegram webhook: /webhook/${BOT_TOKEN.substring(0, 10)}...`);
+    }
+    console.log(`${'='.repeat(50)}\n`);
+});
+
+// Обработка graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('🛑 Получен SIGTERM, закрываем соединения...');
+
+    // Закрываем все WebSocket соединения
+    for (const [userId, ws] of clients) {
+        ws.close(1000, 'Сервер останавливается');
+    }
+
+    wss.close(() => {
+        server.close(() => {
+            console.log('✅ Сервер остановлен');
+            process.exit(0);
+        });
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('\n🛑 Получен SIGINT, закрываем соединения...');
+    process.exit(0);
 });
