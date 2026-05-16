@@ -12,15 +12,16 @@ const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.json());
+// Middleware - увеличиваем лимит для изображений
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ============ ПУТИ К ДАННЫМ (В КОРНЕВОЙ ПАПКЕ data) ============
-const DATA_DIR = path.join(__dirname, 'data');  // ← теперь просто /data
+// ============ ПУТИ К ДАННЫМ ============
+const DATA_DIR = path.join(__dirname, 'data');
 const KEYS_FILE = path.join(DATA_DIR, 'keys.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const DIALOGS_DIR = path.join(DATA_DIR, 'dialogs');
+const IMAGES_DIR = path.join(DATA_DIR, 'images');
 
 // Пароль администратора
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
@@ -35,15 +36,15 @@ console.log('========================================\n');
 // ============ ИНИЦИАЛИЗАЦИЯ ХРАНИЛИЩА ============
 async function initDataStorage() {
     try {
-        // Создаём основную папку data
         await fs.mkdir(DATA_DIR, { recursive: true });
         console.log(`✅ Создана папка: ${DATA_DIR}`);
 
-        // Создаём папку для диалогов
         await fs.mkdir(DIALOGS_DIR, { recursive: true });
         console.log(`✅ Создана папка: ${DIALOGS_DIR}`);
 
-        // Создаём файл keys.json если нет
+        await fs.mkdir(IMAGES_DIR, { recursive: true });
+        console.log(`✅ Создана папка: ${IMAGES_DIR}`);
+
         try {
             await fs.access(KEYS_FILE);
             console.log(`✅ Найден файл: ${KEYS_FILE}`);
@@ -52,7 +53,6 @@ async function initDataStorage() {
             console.log(`✅ Создан файл: ${KEYS_FILE}`);
         }
 
-        // Создаём файл users.json если нет
         try {
             await fs.access(USERS_FILE);
             console.log(`✅ Найден файл: ${USERS_FILE}`);
@@ -61,7 +61,6 @@ async function initDataStorage() {
             console.log(`✅ Создан файл: ${USERS_FILE}`);
         }
 
-        // Проверяем сколько диалогов уже есть
         const dialogFiles = await fs.readdir(DIALOGS_DIR);
         console.log(`✅ Загружено диалогов: ${dialogFiles.length}`);
 
@@ -69,6 +68,7 @@ async function initDataStorage() {
         console.log(`   ${DATA_DIR}/`);
         console.log(`   ├── keys.json (ключи доступа)`);
         console.log(`   ├── users.json (пользователи)`);
+        console.log(`   ├── images/ (изображения)`);
         console.log(`   └── dialogs/ (сообщения)\n`);
 
     } catch (error) {
@@ -78,7 +78,6 @@ async function initDataStorage() {
 
 // ============ ФУНКЦИИ РАБОТЫ С ДАННЫМИ ============
 
-// Получение всех ключей
 async function getAllKeys() {
     try {
         const data = await fs.readFile(KEYS_FILE, 'utf-8');
@@ -88,12 +87,10 @@ async function getAllKeys() {
     }
 }
 
-// Сохранение ключей
 async function saveKeys(keysData) {
     await fs.writeFile(KEYS_FILE, JSON.stringify(keysData, null, 2));
 }
 
-// Генерация нового ключа
 function generateKey() {
     const segments = [];
     for (let i = 0; i < 4; i++) {
@@ -102,10 +99,8 @@ function generateKey() {
     return segments.join('-');
 }
 
-// Создание ключа
 async function createKey(daysValid) {
     const keysData = await getAllKeys();
-
     const key = generateKey();
     const now = Date.now();
 
@@ -125,7 +120,6 @@ async function createKey(daysValid) {
     return key;
 }
 
-// Активация ключа
 async function activateKey(key, username) {
     const keysData = await getAllKeys();
 
@@ -139,7 +133,6 @@ async function activateKey(key, username) {
         return { success: false, error: 'Ключ уже активирован' };
     }
 
-    // Генерируем уникальный ID
     let userId;
     let isUnique = false;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -169,13 +162,11 @@ async function activateKey(key, username) {
     keyData.user_id = userId;
 
     await saveKeys(keysData);
-
     console.log(`✅ Активирован ключ: ${key} -> ${username} (${userId})`);
 
     return { success: true, userId: userId, expiresAt: expiresAt };
 }
 
-// Проверка ключа
 async function checkKey(key, username) {
     const keysData = await getAllKeys();
 
@@ -205,7 +196,6 @@ async function checkKey(key, username) {
     };
 }
 
-// Получение диалога
 async function getDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
@@ -217,7 +207,6 @@ async function getDialog(user1, user2) {
     }
 }
 
-// Сохранение диалога
 async function saveDialog(user1, user2, dialog) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
@@ -225,7 +214,6 @@ async function saveDialog(user1, user2, dialog) {
     console.log(`💾 Сохранён диалог: ${dialogId} (${dialog.messages.length} сообщений)`);
 }
 
-// Удаление ключа
 async function deleteKey(key) {
     const keysData = await getAllKeys();
 
@@ -239,12 +227,19 @@ async function deleteKey(key) {
     return { success: true };
 }
 
+// Сохранение изображения
+async function saveImage(imageData, messageId) {
+    const imagePath = path.join(IMAGES_DIR, `${messageId}.jpg`);
+    const buffer = Buffer.from(imageData, 'base64');
+    await fs.writeFile(imagePath, buffer);
+    return `/api/images/${messageId}.jpg`;
+}
+
 // ============ API ЭНДПОИНТЫ ============
 
 // Админ-логин
 app.post('/api/admin/login', (req, res) => {
     const { password } = req.body;
-
     if (password === ADMIN_PASSWORD) {
         res.json({ success: true });
     } else {
@@ -275,7 +270,6 @@ app.post('/api/admin/generate_key', async (req, res) => {
 app.delete('/api/admin/delete_key/:key', async (req, res) => {
     const { key } = req.params;
     const result = await deleteKey(key);
-
     if (result.success) {
         res.json({ success: true });
     } else {
@@ -358,33 +352,63 @@ app.post('/api/find_user', async (req, res) => {
     }
 });
 
-// Отправка сообщения
+// Отправка сообщения (обновлено для изображений)
 app.post('/api/send', async (req, res) => {
-    const { from, to, text } = req.body;
+    const { from, to, text, is_image, image_data } = req.body;
 
-    if (!from || !to || !text) {
+    if (!from || !to) {
         return res.status(400).json({ error: 'Недостаточно данных' });
     }
 
+    const messageId = Date.now();
+    let imageUrl = null;
+
+    if (is_image && image_data) {
+        imageUrl = await saveImage(image_data, messageId);
+    }
+
     const message = {
-        id: Date.now(),
+        id: messageId,
         from: from,
         to: to,
-        text: text,
+        text: text || (is_image ? '[Изображение]' : ''),
+        is_image: is_image || false,
+        image_url: imageUrl,
+        image_data: is_image ? image_data : null, // Сохраняем base64 для истории
         timestamp: Math.floor(Date.now() / 1000)
     };
 
-    const dialog = await getDialog(from, to);
-    dialog.messages.push(message);
-
-    // Ограничиваем 100 сообщениями
-    if (dialog.messages.length > 100) {
-        dialog.messages = dialog.messages.slice(-100);
+    // Сохраняем для получателя
+    const dialogTo = await getDialog(from, to);
+    dialogTo.messages.push(message);
+    if (dialogTo.messages.length > 100) {
+        dialogTo.messages = dialogTo.messages.slice(-100);
     }
+    await saveDialog(from, to, dialogTo);
 
-    await saveDialog(from, to, dialog);
+    // Сохраняем для отправителя
+    const dialogFrom = await getDialog(to, from);
+    dialogFrom.messages.push(message);
+    if (dialogFrom.messages.length > 100) {
+        dialogFrom.messages = dialogFrom.messages.slice(-100);
+    }
+    await saveDialog(to, from, dialogFrom);
 
+    console.log(`📨 ${from} -> ${to}: ${is_image ? '[Изображение]' : text.substring(0, 50)}`);
     res.json({ success: true, message: message });
+});
+
+// Получение изображения
+app.get('/api/images/:imageId', async (req, res) => {
+    const { imageId } = req.params;
+    const imagePath = path.join(IMAGES_DIR, imageId);
+
+    try {
+        await fs.access(imagePath);
+        res.sendFile(imagePath);
+    } catch {
+        res.status(404).json({ error: 'Изображение не найдено' });
+    }
 });
 
 // Получение сообщений
@@ -467,6 +491,7 @@ async function start() {
         console.log(`${'='.repeat(50)}`);
         console.log(`📡 Порт: ${PORT}`);
         console.log(`📁 Данные: ${DATA_DIR}`);
+        console.log(`🖼️ Изображения: ${IMAGES_DIR}`);
         console.log(`🔐 Админ панель: https://msgsendlerpro.bothost.tech/`);
         console.log(`📊 Health: https://msgsendlerpro.bothost.tech/health`);
         console.log(`${'='.repeat(50)}\n`);
