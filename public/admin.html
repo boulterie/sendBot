@@ -12,13 +12,14 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f12 0%, #1a1a1f 100%);
             min-height: 100vh;
+            color: #e0e0e0;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -32,41 +33,56 @@
         }
 
         .login-box {
-            background: white;
-            border-radius: 20px;
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 24px;
             padding: 40px;
             width: 400px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
         }
 
         .login-box h1 {
             margin-bottom: 10px;
-            color: #333;
+            font-size: 28px;
+            background: linear-gradient(135deg, #fff, #4CAF50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .login-box input {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             margin: 10px 0;
-            border: 2px solid #ddd;
-            border-radius: 8px;
+            background: rgba(20, 20, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
             font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .login-box input:focus {
+            outline: none;
+            border-color: #4CAF50;
         }
 
         .login-box button {
             width: 100%;
-            padding: 12px;
-            background: #007AFF;
+            padding: 14px;
+            background: linear-gradient(135deg, #4CAF50, #2e7d32);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
+            transition: all 0.3s;
         }
 
         .login-box button:hover {
-            background: #005CC8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
         }
 
         /* Основная админка */
@@ -74,73 +90,153 @@
             display: none;
         }
 
+        /* Шапка */
         .header {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 20px;
+            padding: 20px 30px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .logout-btn {
+            float: right;
+            background: rgba(220, 53, 69, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(220, 53, 69, 1);
+        }
+
+        /* Статистика */
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         .stat-card {
-            background: white;
-            border-radius: 15px;
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 16px;
             padding: 20px;
             text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            border-color: #4CAF50;
         }
 
         .stat-number {
             font-size: 32px;
             font-weight: bold;
-            color: #007AFF;
+            color: #4CAF50;
         }
 
         .stat-label {
-            color: #666;
-            margin-top: 5px;
+            color: #888;
+            margin-top: 8px;
+            font-size: 13px;
         }
 
+        /* Панели */
         .panel {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .panel h2 {
+            font-size: 18px;
             margin-bottom: 20px;
-            color: #333;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .generate-form {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
+        /* Формы */
+        .form-group {
+            margin-bottom: 15px;
         }
 
-        .generate-form input {
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            width: 150px;
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #aaa;
+            font-size: 13px;
         }
 
-        .generate-form button {
-            padding: 10px 20px;
-            background: #28a745;
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(20, 20, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
             color: white;
-            border: none;
-            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        /* Чекбокс */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input {
+            width: 18px;
+            height: 18px;
             cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        /* Таблица */
+        .table-container {
+            overflow-x: auto;
         }
 
         table {
@@ -151,69 +247,275 @@
         th, td {
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         th {
-            background: #f8f9fa;
+            background: rgba(20, 20, 25, 0.8);
             font-weight: bold;
+            color: #4CAF50;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover {
+            background: rgba(30, 30, 35, 0.9);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.03);
         }
 
         .status-active {
-            color: #28a745;
-            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .status-expired {
+            color: #ff6b6b;
         }
 
         .status-inactive {
-            color: #dc3545;
-        }
-
-        .delete-btn {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
+            color: #ffd700;
         }
 
         .key-code {
             font-family: monospace;
-            font-size: 14px;
-            background: #f0f0f0;
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.3);
             padding: 4px 8px;
-            border-radius: 4px;
+            border-radius: 6px;
         }
 
-        .server-status {
-            background: #e8f5e9;
-            padding: 10px;
-            border-radius: 8px;
+        button.btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin: 2px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50, #2e7d32);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-danger {
+            background: rgba(220, 53, 69, 0.8);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: rgba(220, 53, 69, 1);
+        }
+
+        .btn-warning {
+            background: rgba(255, 193, 7, 0.8);
+            color: #1a1a1a;
+        }
+
+        .btn-warning:hover {
+            background: rgba(255, 193, 7, 1);
+        }
+
+        .btn-secondary {
+            background: rgba(100, 100, 110, 0.8);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(100, 100, 110, 1);
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px;
+            background: rgba(20, 20, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+        }
+
+        .search-box button {
+            padding: 12px 25px;
+        }
+
+        .notification-item {
+            background: rgba(20, 20, 25, 0.8);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 3px solid #4CAF50;
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .notification-title {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .notification-time {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .notification-message {
+            color: #ccc;
+            font-size: 14px;
+        }
+
+        .notification-actions {
+            margin-top: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+
+        .tab {
+            padding: 8px 20px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab.active {
+            background: #4CAF50;
+            color: #1a1a1a;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .settings-label {
+            font-weight: bold;
+        }
+
+        .settings-value {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .toggle-switch {
+            width: 50px;
+            height: 25px;
+            background: #333;
+            border-radius: 25px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #4CAF50;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            width: 21px;
+            height: 21px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 3px;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 26px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #252525;
+            border-radius: 20px;
+            padding: 30px;
+            width: 450px;
+            max-width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-content h3 {
             margin-bottom: 20px;
         }
 
-        .server-status.online {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .logout-btn {
-            float: right;
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
         }
 
         .error {
-            color: #dc3545;
+            color: #ff6b6b;
             margin-top: 10px;
         }
 
         .success {
-            color: #28a745;
+            color: #4CAF50;
             margin-top: 10px;
         }
     </style>
@@ -224,7 +526,7 @@
         <div id="loginContainer" class="login-container">
             <div class="login-box">
                 <h1>🔐 Админ панель</h1>
-                <p>Введите пароль для доступа</p>
+                <p style="color: #888; margin-bottom: 20px;">Введите пароль для доступа</p>
                 <input type="password" id="adminPassword" placeholder="Пароль">
                 <button onclick="adminLogin()">Войти</button>
                 <div id="loginError" class="error"></div>
@@ -236,10 +538,11 @@
             <div class="header">
                 <button class="logout-btn" onclick="logout()">Выйти</button>
                 <h1>📡 Админ панель мессенджера</h1>
-                <div id="serverStatus" class="server-status">Загрузка статуса...</div>
+                <p>Управление ключами, пользователями и настройками</p>
+                <div id="serverStatus" style="margin-top: 10px; font-size: 12px; color: #888;"></div>
             </div>
 
-            <div class="stats">
+            <div class="stats" id="stats">
                 <div class="stat-card">
                     <div class="stat-number" id="totalKeys">0</div>
                     <div class="stat-label">Всего ключей</div>
@@ -252,45 +555,137 @@
                     <div class="stat-number" id="activeUsers">0</div>
                     <div class="stat-label">Активных пользователей</div>
                 </div>
-            </div>
-
-            <div class="panel">
-                <h2>🎫 Генерация ключа</h2>
-                <div class="generate-form">
-                    <input type="number" id="keyDays" placeholder="Дней (1-365)" min="1" max="365">
-                    <button onclick="generateKey()">Сгенерировать ключ</button>
+                <div class="stat-card">
+                    <div class="stat-number" id="dialogsCount">0</div>
+                    <div class="stat-label">Диалогов</div>
                 </div>
-                <div id="generateResult"></div>
             </div>
 
-            <div class="panel">
+            <!-- Вкладки -->
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('keys')">🔑 Ключи</div>
+                <div class="tab" onclick="switchTab('notifications')">📢 Уведомления</div>
+                <div class="tab" onclick="switchTab('settings')">⚙️ Настройки</div>
+            </div>
+
+            <!-- Вкладка Ключи -->
+            <div id="tabKeys" class="panel">
+                <h2>🎫 Генерация ключа</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Количество дней</label>
+                        <input type="number" id="keyDays" placeholder="Дней (1-365)" min="1" max="365" value="30">
+                    </div>
+                    <div class="form-group checkbox-group" style="justify-content: center;">
+                        <input type="checkbox" id="hwidCheck" checked>
+                        <label>🔒 Проверять HWID диска</label>
+                    </div>
+                    <div class="form-group" style="flex: 0.5;">
+                        <button class="btn btn-primary" style="width: 100%; margin-top: 24px;" onclick="generateKey()">Сгенерировать ключ</button>
+                    </div>
+                </div>
+                <div id="generateResult" class="success"></div>
+
+                <h2 style="margin-top: 30px;">🔍 Поиск ключей</h2>
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Поиск по ключу, имени пользователя или ID..." onkeyup="searchKeys()">
+                    <button class="btn btn-secondary" onclick="searchKeys()">🔍 Найти</button>
+                    <button class="btn btn-secondary" onclick="resetSearch()">🔄 Сброс</button>
+                </div>
+
                 <h2>📋 Список ключей</h2>
-                <div style="overflow-x: auto;">
+                <div class="table-container">
                     <table id="keysTable">
                         <thead>
                             <tr>
-                                <th>Ключ</th>
-                                <th>Создан</th>
-                                <th>Дней</th>
-                                <th>Статус</th>
+                                <th onclick="sortKeys('key')">Ключ 🔽</th>
+                                <th onclick="sortKeys('created_at')">Создан</th>
+                                <th onclick="sortKeys('days_valid')">Дней</th>
+                                <th onclick="sortKeys('activated')">Статус</th>
                                 <th>Активирован</th>
                                 <th>Истекает</th>
                                 <th>Пользователь</th>
                                 <th>ID</th>
+                                <th>HWID</th>
+                                <th>Проверка HWID</th>
                                 <th>Действия</th>
                             </tr>
                         </thead>
                         <tbody id="keysTableBody">
-                            <tr><td colspan="9">Загрузка...</td></tr>
+                            <tr><td colspan="11">Загрузка...</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- Вкладка Уведомления -->
+            <div id="tabNotifications" class="panel" style="display: none;">
+                <h2>📢 Отправить уведомление</h2>
+                <div class="form-group">
+                    <label>Заголовок</label>
+                    <input type="text" id="notifTitle" placeholder="Заголовок уведомления">
+                </div>
+                <div class="form-group">
+                    <label>Сообщение</label>
+                    <textarea id="notifMessage" rows="3" style="width: 100%; background: rgba(20,20,25,0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px; color: white;" placeholder="Текст уведомления"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="sendNotification()">📨 Отправить</button>
+                <div id="notifResult" class="success" style="margin-top: 10px;"></div>
+
+                <h2 style="margin-top: 30px;">📋 История уведомлений</h2>
+                <div id="notificationsList"></div>
+            </div>
+
+            <!-- Вкладка Настройки -->
+            <div id="tabSettings" class="panel" style="display: none;">
+                <h2>⚙️ Настройки сервера</h2>
+                <div class="settings-row">
+                    <div class="settings-label">🗑️ Автоочистка диалогов</div>
+                    <div class="settings-value">
+                        <div id="autoCleanupToggle" class="toggle-switch" onclick="toggleAutoCleanup()"></div>
+                        <span id="autoCleanupStatus"></span>
+                    </div>
+                </div>
+                <div class="settings-row">
+                    <div class="settings-label">⏱️ Время жизни диалога (дней)</div>
+                    <div class="settings-value">
+                        <input type="number" id="dialogLifetime" min="1" max="365" style="width: 100px;">
+                        <button class="btn btn-primary btn-small" onclick="saveDialogLifetime()">Сохранить</button>
+                    </div>
+                </div>
+                <div id="settingsResult" class="success" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно редактирования ключа -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h3>✏️ Редактирование ключа</h3>
+            <div class="form-group">
+                <label>Ключ</label>
+                <input type="text" id="editKey" readonly style="background: #1f1f1f;">
+            </div>
+            <div class="form-group">
+                <label>Количество дней</label>
+                <input type="number" id="editDays" min="1" max="365">
+            </div>
+            <div class="form-group checkbox-group">
+                <input type="checkbox" id="editHwidCheck">
+                <label>Проверять HWID диска</label>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveKeyEdit()">Сохранить</button>
             </div>
         </div>
     </div>
 
     <script>
         let isLoggedIn = false;
+        let allKeys = {};
+        let currentSort = { field: 'created_at', order: 'desc' };
+        let currentSearch = '';
 
         // Форматирование даты
         function formatDate(timestamp) {
@@ -308,9 +703,34 @@
             return `${days} дн.`;
         }
 
+        // Переключение вкладок
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tabKeys').style.display = 'none';
+            document.getElementById('tabNotifications').style.display = 'none';
+            document.getElementById('tabSettings').style.display = 'none';
+
+            if (tab === 'keys') {
+                document.querySelector('.tab').classList.add('active');
+                document.getElementById('tabKeys').style.display = 'block';
+            } else if (tab === 'notifications') {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('tabNotifications').style.display = 'block';
+                loadNotifications();
+            } else if (tab === 'settings') {
+                document.querySelectorAll('.tab')[2].classList.add('active');
+                document.getElementById('tabSettings').style.display = 'block';
+                loadSettings();
+            }
+        }
+
         // Админ-логин
         async function adminLogin() {
             const password = document.getElementById('adminPassword').value;
+            if (!password) {
+                document.getElementById('loginError').innerText = 'Введите пароль';
+                return;
+            }
 
             try {
                 const response = await fetch('/api/admin/login', {
@@ -323,7 +743,7 @@
                     isLoggedIn = true;
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('adminContainer').style.display = 'block';
-                    loadServerStatus();
+                    loadStats();
                     loadKeys();
                 } else {
                     document.getElementById('loginError').innerText = 'Неверный пароль';
@@ -340,17 +760,16 @@
             document.getElementById('adminPassword').value = '';
         }
 
-        async function loadServerStatus() {
+        async function loadStats() {
             try {
                 const response = await fetch('/health');
                 const data = await response.json();
-
-                document.getElementById('serverStatus').innerHTML = `
-                    ✅ Сервер работает<br>
-                    Всего ключей: ${data.total_keys} | Активировано: ${data.activated_keys}
-                `;
+                document.getElementById('totalKeys').innerText = data.total_keys || 0;
+                document.getElementById('activatedKeys').innerText = data.activated_keys || 0;
+                document.getElementById('dialogsCount').innerText = data.dialogs_count || 0;
+                document.getElementById('serverStatus').innerHTML = `🟢 Сервер работает | Ключей: ${data.total_keys} | Активировано: ${data.activated_keys} | Диалогов: ${data.dialogs_count}`;
             } catch (error) {
-                document.getElementById('serverStatus').innerHTML = '❌ Ошибка подключения к серверу';
+                document.getElementById('serverStatus').innerHTML = '🔴 Ошибка подключения';
             }
         }
 
@@ -358,45 +777,99 @@
             try {
                 const response = await fetch('/api/admin/keys');
                 const data = await response.json();
-                const keys = data.keys;
-
-                const totalKeys = Object.keys(keys).length;
-                const activatedKeys = Object.values(keys).filter(k => k.activated).length;
-                const activeUsers = Object.values(keys).filter(k => k.activated && k.expires_at > Date.now()).length;
-
-                document.getElementById('totalKeys').innerText = totalKeys;
-                document.getElementById('activatedKeys').innerText = activatedKeys;
-                document.getElementById('activeUsers').innerText = activeUsers;
-
-                const tbody = document.getElementById('keysTableBody');
-                tbody.innerHTML = '';
-
-                for (const [key, data] of Object.entries(keys)) {
-                    const row = tbody.insertRow();
-                    const isActive = data.activated && data.expires_at > Date.now();
-                    const isExpired = data.activated && data.expires_at <= Date.now();
-
-                    row.innerHTML = `
-                        <td><span class="key-code">${key}</span></td>
-                        <td>${formatDate(data.created_at)}</td>
-                        <td>${data.days_valid}</td>
-                        <td class="${isActive ? 'status-active' : (data.activated ? 'status-inactive' : 'status-inactive')}">
-                            ${data.activated ? (isActive ? '✅ Активен' : '⛔ Истёк') : '⚪ Не активирован'}
-                        </td>
-                        <td>${data.activated ? formatDate(data.activated_at) : '—'}</td>
-                        <td>${data.expires_at ? formatDate(data.expires_at) + ' (' + getDaysLeft(data.expires_at) + ')' : '—'}</td>
-                        <td>${data.username || '—'}</td>
-                        <td>${data.user_id || '—'}</td>
-                        <td><button class="delete-btn" onclick="deleteKey('${key}')">Удалить</button></td>
-                    `;
-                }
+                allKeys = data.keys;
+                renderKeys();
             } catch (error) {
                 console.error('Ошибка загрузки ключей:', error);
             }
         }
 
+        function renderKeys() {
+            let keysArray = Object.entries(allKeys).map(([key, data]) => ({ key, ...data }));
+
+            // Фильтрация
+            if (currentSearch) {
+                const searchLower = currentSearch.toLowerCase();
+                keysArray = keysArray.filter(k =>
+                    k.key.toLowerCase().includes(searchLower) ||
+                    (k.username && k.username.toLowerCase().includes(searchLower)) ||
+                    (k.user_id && k.user_id.toLowerCase().includes(searchLower))
+                );
+            }
+
+            // Сортировка
+            keysArray.sort((a, b) => {
+                let aVal = a[currentSort.field];
+                let bVal = b[currentSort.field];
+                if (currentSort.field === 'created_at' || currentSort.field === 'expires_at') {
+                    aVal = aVal || 0;
+                    bVal = bVal || 0;
+                }
+                if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+                if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+                if (aVal < bVal) return currentSort.order === 'asc' ? -1 : 1;
+                if (aVal > bVal) return currentSort.order === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            const tbody = document.getElementById('keysTableBody');
+            tbody.innerHTML = '';
+
+            for (const keyData of keysArray) {
+                const row = tbody.insertRow();
+                const isActive = keyData.activated && keyData.expires_at > Date.now();
+                const isExpired = keyData.activated && keyData.expires_at <= Date.now();
+
+                row.innerHTML = `
+                    <td><span class="key-code">${keyData.key}</span></td>
+                    <td>${formatDate(keyData.created_at)}</td>
+                    <td>${keyData.days_valid}</td>
+                    <td class="${isActive ? 'status-active' : (isExpired ? 'status-expired' : 'status-inactive')}">
+                        ${isActive ? '✅ Активен' : (isExpired ? '⛔ Истёк' : '⚪ Не активирован')}
+                    </td>
+                    <td>${keyData.activated ? formatDate(keyData.activated_at) : '—'}</td>
+                    <td>${keyData.expires_at ? formatDate(keyData.expires_at) + ' (' + getDaysLeft(keyData.expires_at) + ')' : '—'}</td>
+                    <td>${keyData.username || '—'}</td>
+                    <td>${keyData.user_id || '—'}</td>
+                    <td><span class="key-code">${keyData.hwid ? keyData.hwid.substring(0, 16) + '...' : '—'}</span></td>
+                    <td>${keyData.hwid_check_enabled ? '✅ Вкл' : '❌ Выкл'}</td>
+                    <td>
+                        ${!keyData.activated ? `<button class="btn-small btn-warning" onclick="editKey('${keyData.key}', ${keyData.days_valid}, ${keyData.hwid_check_enabled})">✏️ Ред.</button>` : ''}
+                        ${!keyData.activated ? `<button class="btn-small btn-secondary" onclick="resetKey('${keyData.key}')">🔄 Сброс</button>` : ''}
+                        <button class="btn-small btn-danger" onclick="deleteKey('${keyData.key}')">🗑️ Удал.</button>
+                    </td>
+                `;
+            }
+
+            if (keysArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11">Ключи не найдены</td></tr>';
+            }
+        }
+
+        function sortKeys(field) {
+            if (currentSort.field === field) {
+                currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.field = field;
+                currentSort.order = 'asc';
+            }
+            renderKeys();
+        }
+
+        function searchKeys() {
+            currentSearch = document.getElementById('searchInput').value;
+            renderKeys();
+        }
+
+        function resetSearch() {
+            document.getElementById('searchInput').value = '';
+            currentSearch = '';
+            renderKeys();
+        }
+
         async function generateKey() {
             const days = document.getElementById('keyDays').value;
+            const hwidCheck = document.getElementById('hwidCheck').checked;
 
             if (!days || days < 1 || days > 365) {
                 document.getElementById('generateResult').innerHTML = '<span class="error">Введите количество дней (1-365)</span>';
@@ -407,15 +880,14 @@
                 const response = await fetch('/api/admin/generate_key', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ days: parseInt(days) })
+                    body: JSON.stringify({ days: parseInt(days), hwid_check: hwidCheck })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById('generateResult').innerHTML = `
-                        <span class="success">✅ Ключ создан: <span class="key-code">${data.key}</span> (${data.days} дней)</span>
-                    `;
+                    document.getElementById('generateResult').innerHTML = `<span class="success">✅ Ключ создан: <span class="key-code">${data.key}</span> (${data.days} дней, HWID проверка: ${data.hwid_check ? 'вкл' : 'выкл'})</span>`;
                     loadKeys();
+                    loadStats();
                     setTimeout(() => {
                         document.getElementById('generateResult').innerHTML = '';
                     }, 5000);
@@ -427,8 +899,64 @@
             }
         }
 
+        let currentEditKey = null;
+        function editKey(key, days, hwidCheck) {
+            currentEditKey = key;
+            document.getElementById('editKey').value = key;
+            document.getElementById('editDays').value = days;
+            document.getElementById('editHwidCheck').checked = hwidCheck;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditKey = null;
+        }
+
+        async function saveKeyEdit() {
+            if (!currentEditKey) return;
+            const days = parseInt(document.getElementById('editDays').value);
+            const hwidCheck = document.getElementById('editHwidCheck').checked;
+
+            try {
+                const response = await fetch(`/api/admin/update_key/${currentEditKey}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days_valid: days, hwid_check_enabled: hwidCheck })
+                });
+
+                if (response.ok) {
+                    closeEditModal();
+                    loadKeys();
+                } else {
+                    alert('Ошибка редактирования ключа');
+                }
+            } catch (error) {
+                alert('Ошибка подключения');
+            }
+        }
+
+        async function resetKey(key) {
+            if (!confirm(`Сбросить ключ ${key}? Все данные активации будут удалены.`)) return;
+
+            try {
+                const response = await fetch(`/api/admin/reset_key/${key}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    loadKeys();
+                } else {
+                    alert('Ошибка сброса ключа');
+                }
+            } catch (error) {
+                alert('Ошибка подключения');
+            }
+        }
+
         async function deleteKey(key) {
-            if (!confirm(`Удалить ключ ${key}?`)) return;
+            if (!confirm(`Удалить ключ ${key}? Это действие необратимо.`)) return;
 
             try {
                 const response = await fetch(`/api/admin/delete_key/${key}`, {
@@ -437,6 +965,7 @@
 
                 if (response.ok) {
                     loadKeys();
+                    loadStats();
                 } else {
                     alert('Ошибка удаления ключа');
                 }
@@ -445,12 +974,177 @@
             }
         }
 
+        async function sendNotification() {
+            const title = document.getElementById('notifTitle').value.trim();
+            const message = document.getElementById('notifMessage').value.trim();
+
+            if (!title || !message) {
+                document.getElementById('notifResult').innerHTML = '<span class="error">Заполните заголовок и сообщение</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/send_notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, message })
+                });
+
+                if (response.ok) {
+                    document.getElementById('notifTitle').value = '';
+                    document.getElementById('notifMessage').value = '';
+                    document.getElementById('notifResult').innerHTML = '<span class="success">✅ Уведомление отправлено</span>';
+                    loadNotifications();
+                    setTimeout(() => {
+                        document.getElementById('notifResult').innerHTML = '';
+                    }, 3000);
+                } else {
+                    document.getElementById('notifResult').innerHTML = '<span class="error">Ошибка отправки</span>';
+                }
+            } catch (error) {
+                document.getElementById('notifResult').innerHTML = '<span class="error">Ошибка подключения</span>';
+            }
+        }
+
+        async function loadNotifications() {
+            try {
+                const response = await fetch('/api/admin/notifications');
+                const data = await response.json();
+                const notifications = data.notifications || [];
+
+                const container = document.getElementById('notificationsList');
+                if (notifications.length === 0) {
+                    container.innerHTML = '<p style="color: #888;">Нет уведомлений</p>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                for (const notif of notifications) {
+                    const time = new Date(notif.timestamp * 1000).toLocaleString('ru-RU');
+                    container.innerHTML += `
+                        <div class="notification-item">
+                            <div class="notification-header">
+                                <span class="notification-title">📢 ${escapeHtml(notif.title)}</span>
+                                <span class="notification-time">${time}</span>
+                            </div>
+                            <div class="notification-message">${escapeHtml(notif.message)}</div>
+                            <div class="notification-actions">
+                                <button class="btn-small btn-danger" onclick="deleteNotification(${notif.id})">🗑️ Удалить</button>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки уведомлений:', error);
+            }
+        }
+
+        async function deleteNotification(id) {
+            if (!confirm('Удалить уведомление?')) return;
+
+            try {
+                const response = await fetch(`/api/admin/delete_notification/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadNotifications();
+                } else {
+                    alert('Ошибка удаления');
+                }
+            } catch (error) {
+                alert('Ошибка подключения');
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/admin/settings');
+                const data = await response.json();
+
+                const toggle = document.getElementById('autoCleanupToggle');
+                const statusSpan = document.getElementById('autoCleanupStatus');
+
+                if (data.auto_cleanup_enabled) {
+                    toggle.classList.add('active');
+                    statusSpan.innerHTML = '🟢 Включена';
+                } else {
+                    toggle.classList.remove('active');
+                    statusSpan.innerHTML = '🔴 Выключена';
+                }
+
+                document.getElementById('dialogLifetime').value = data.dialog_lifetime_days;
+            } catch (error) {
+                console.error('Ошибка загрузки настроек:', error);
+            }
+        }
+
+        async function toggleAutoCleanup() {
+            const toggle = document.getElementById('autoCleanupToggle');
+            const current = toggle.classList.contains('active');
+            const newState = !current;
+
+            try {
+                const response = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_cleanup_enabled: newState })
+                });
+
+                if (response.ok) {
+                    if (newState) {
+                        toggle.classList.add('active');
+                        document.getElementById('autoCleanupStatus').innerHTML = '🟢 Включена';
+                    } else {
+                        toggle.classList.remove('active');
+                        document.getElementById('autoCleanupStatus').innerHTML = '🔴 Выключена';
+                    }
+                    document.getElementById('settingsResult').innerHTML = '<span class="success">✅ Настройки сохранены</span>';
+                    setTimeout(() => {
+                        document.getElementById('settingsResult').innerHTML = '';
+                    }, 2000);
+                }
+            } catch (error) {
+                alert('Ошибка сохранения');
+            }
+        }
+
+        async function saveDialogLifetime() {
+            const days = parseInt(document.getElementById('dialogLifetime').value);
+            if (days < 1 || days > 365) {
+                document.getElementById('settingsResult').innerHTML = '<span class="error">Введите число от 1 до 365</span>';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dialog_lifetime_days: days })
+                });
+
+                if (response.ok) {
+                    document.getElementById('settingsResult').innerHTML = '<span class="success">✅ Время жизни диалогов сохранено</span>';
+                    setTimeout(() => {
+                        document.getElementById('settingsResult').innerHTML = '';
+                    }, 2000);
+                }
+            } catch (error) {
+                alert('Ошибка сохранения');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // Обновление каждые 10 секунд
         if (isLoggedIn) {
             setInterval(() => {
                 if (isLoggedIn) {
-                    loadServerStatus();
-                    loadKeys();
+                    loadStats();
                 }
             }, 10000);
         }
