@@ -18,7 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ============ КОНСТАНТЫ ============
 const DEFAULT_DIALOG_LIFETIME_DAYS = 7;
-const MOSCOW_OFFSET = 3 * 60 * 60 * 1000; // Москва UTC+3
+const MOSCOW_OFFSET = 3 * 60 * 60 * 1000;
 
 // ============ ПУТИ К ДАННЫМ ============
 const DATA_DIR = path.join(__dirname, 'data');
@@ -106,16 +106,15 @@ async function createKey(daysValid, hwidCheckEnabled = true) {
         created_at: now,
         days_valid: daysValid,
         activated: false,
+        activations_left: 2,  // Два слота для активации
         activated_at: null,
         expires_at: null,
-        username: null,
-        user_id: null,
-        hwid: null,
+        users: [],  // Массив пользователей
         hwid_check_enabled: hwidCheckEnabled
     };
 
     await saveKeys(keysData);
-    console.log(`🎫 Создан ключ: ${key} (${daysValid} дней, HWID проверка: ${hwidCheckEnabled ? 'вкл' : 'выкл'})`);
+    console.log(`🎫 Создан ключ: ${key} (${daysValid} дней, HWID проверка: ${hwidCheckEnabled ? 'вкл' : 'выкл'}, 2 слота)`);
     return key;
 }
 
@@ -137,11 +136,10 @@ async function resetKey(key) {
         created_at: keysData.keys[key].created_at,
         days_valid: keysData.keys[key].days_valid,
         activated: false,
+        activations_left: 2,
         activated_at: null,
         expires_at: null,
-        username: null,
-        user_id: null,
-        hwid: null,
+        users: [],
         hwid_check_enabled: keysData.keys[key].hwid_check_enabled
     };
     await saveKeys(keysData);
@@ -152,9 +150,21 @@ async function resetKey(key) {
 async function activateKey(key, username, hwid = null) {
     const keysData = await getAllKeys();
     if (!keysData.keys[key]) return { success: false, error: 'Ключ не найден' };
-    const keyData = keysData.keys[key];
-    if (keyData.activated) return { success: false, error: 'Ключ уже активирован' };
 
+    const keyData = keysData.keys[key];
+
+    // Проверяем, есть ли свободные слоты
+    if (keyData.activations_left <= 0) {
+        return { success: false, error: 'Ключ уже использован максимальное количество раз (2)' };
+    }
+
+    // Проверяем, не активирован ли уже этот пользователь
+    const existingUser = keyData.users.find(u => u.username === username);
+    if (existingUser) {
+        return { success: false, error: 'Это имя уже используется с данным ключом' };
+    }
+
+    // Генерируем уникальный ID
     let userId;
     let isUnique = false;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -162,34 +172,68 @@ async function activateKey(key, username, hwid = null) {
         userId = '';
         for (let i = 0; i < 4; i++) userId += chars[Math.floor(Math.random() * chars.length)];
         let idExists = false;
-        for (const k in keysData.keys) if (keysData.keys[k].user_id === userId && keysData.keys[k].activated) { idExists = true; break; }
+        for (const k in keysData.keys) {
+            for (const user of keysData.keys[k].users) {
+                if (user.user_id === userId) {
+                    idExists = true;
+                    break;
+                }
+            }
+        }
         if (!idExists) isUnique = true;
     }
 
     const now = getMoscowTime();
-    const expiresAt = now + (keyData.days_valid * 24 * 60 * 60 * 1000);
+    const expiresAt = keyData.expires_at || (now + (keyData.days_valid * 24 * 60 * 60 * 1000));
 
+    // Добавляем пользователя
+    keyData.users.push({
+        username: username,
+        user_id: userId,
+        hwid: (hwid && keyData.hwid_check_enabled) ? hwid : null,
+        activated_at: now
+    });
+
+    keyData.activations_left--;
     keyData.activated = true;
-    keyData.activated_at = now;
+    keyData.activated_at = keyData.activated_at || now;
     keyData.expires_at = expiresAt;
-    keyData.username = username;
-    keyData.user_id = userId;
-    if (hwid && keyData.hwid_check_enabled) keyData.hwid = hwid;
 
     await saveKeys(keysData);
-    console.log(`✅ Активирован ключ: ${key} -> ${username} (${userId})`);
+    console.log(`✅ Активирован слот ключа: ${key} -> ${username} (${userId}), осталось слотов: ${keyData.activations_left}`);
+
     return { success: true, userId: userId, expiresAt: expiresAt };
 }
 
 async function checkKey(key, username, hwid = null) {
     const keysData = await getAllKeys();
     if (!keysData.keys[key]) return { success: false, error: 'Ключ не найден' };
+
     const keyData = keysData.keys[key];
-    if (!keyData.activated) return { success: false, error: 'Ключ не активирован' };
-    if (keyData.username !== username) return { success: false, error: 'Имя не соответствует ключу' };
-    if (getMoscowTime() > keyData.expires_at) return { success: false, error: 'Срок действия ключа истёк' };
-    if (keyData.hwid_check_enabled && keyData.hwid && (!hwid || keyData.hwid !== hwid)) return { success: false, error: 'HWID не совпадает. Доступ запрещён.' };
-    return { success: true, userId: keyData.user_id, username: keyData.username, expiresAt: keyData.expires_at };
+
+    // Ищем пользователя в массиве
+    const userData = keyData.users.find(u => u.username === username);
+
+    if (!userData) {
+        return { success: false, error: 'Пользователь не найден в этом ключе' };
+    }
+
+    if (getMoscowTime() > keyData.expires_at) {
+        return { success: false, error: 'Срок действия ключа истёк' };
+    }
+
+    if (keyData.hwid_check_enabled && userData.hwid) {
+        if (!hwid || userData.hwid !== hwid) {
+            return { success: false, error: 'HWID не совпадает. Доступ запрещён.' };
+        }
+    }
+
+    return {
+        success: true,
+        userId: userData.user_id,
+        username: userData.username,
+        expiresAt: keyData.expires_at
+    };
 }
 
 async function deleteKey(key) {
@@ -234,7 +278,6 @@ async function deleteDialog(user1, user2) {
 async function createEmptyDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
-
     try {
         await fs.access(dialogFile);
         return { success: true, exists: true, created: false };
@@ -252,7 +295,6 @@ async function createEmptyDialog(user1, user2) {
 async function dialogExists(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
-
     try {
         await fs.access(dialogFile);
         const data = await fs.readFile(dialogFile, 'utf-8');
@@ -260,7 +302,6 @@ async function dialogExists(user1, user2) {
         const settings = await getSettings();
         const now = getMoscowTime();
         const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
-
         if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
             return { exists: false, expired: true };
         }
@@ -275,7 +316,6 @@ async function checkAndDeleteExpiredDialog(user1, user2) {
     const settings = await getSettings();
     const now = getMoscowTime();
     const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
-
     if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
         await deleteDialog(user1, user2);
         return { expired: true, deleted: true };
@@ -360,7 +400,11 @@ app.post('/api/admin/login', (req, res) => {
     else res.status(401).json({ success: false, error: 'Неверный пароль' });
 });
 
-app.get('/api/admin/keys', async (req, res) => { const keysData = await getAllKeys(); res.json({ keys: keysData.keys }); });
+app.get('/api/admin/keys', async (req, res) => {
+    const keysData = await getAllKeys();
+    res.json({ keys: keysData.keys });
+});
+
 app.post('/api/admin/generate_key', async (req, res) => {
     const { days, hwid_check } = req.body;
     const daysNum = parseInt(days);
@@ -369,6 +413,7 @@ app.post('/api/admin/generate_key', async (req, res) => {
     const key = await createKey(daysNum, hwidCheckEnabled);
     res.json({ success: true, key: key, days: daysNum, hwid_check: hwidCheckEnabled });
 });
+
 app.put('/api/admin/update_key/:key', async (req, res) => {
     const { key } = req.params;
     const { days_valid, hwid_check_enabled } = req.body;
@@ -376,26 +421,40 @@ app.put('/api/admin/update_key/:key', async (req, res) => {
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: result.error });
 });
+
 app.post('/api/admin/reset_key/:key', async (req, res) => {
     const { key } = req.params;
     const result = await resetKey(key);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: result.error });
 });
+
 app.delete('/api/admin/delete_key/:key', async (req, res) => {
     const { key } = req.params;
     const result = await deleteKey(key);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: result.error });
 });
+
 app.post('/api/admin/search_keys', async (req, res) => {
     const { query } = req.body;
     const keysData = await getAllKeys();
     const results = {};
     const lowerQuery = query.toLowerCase();
     for (const [key, data] of Object.entries(keysData.keys)) {
-        if (key.toLowerCase().includes(lowerQuery) || (data.username && data.username.toLowerCase().includes(lowerQuery)) || (data.user_id && data.user_id.toLowerCase().includes(lowerQuery))) {
+        if (key.toLowerCase().includes(lowerQuery)) {
             results[key] = data;
+        } else {
+            for (const user of data.users) {
+                if (user.username && user.username.toLowerCase().includes(lowerQuery)) {
+                    results[key] = data;
+                    break;
+                }
+                if (user.user_id && user.user_id.toLowerCase().includes(lowerQuery)) {
+                    results[key] = data;
+                    break;
+                }
+            }
         }
     }
     res.json({ keys: results });
@@ -450,9 +509,11 @@ app.post('/api/find_user', async (req, res) => {
     const keysData = await getAllKeys();
     let foundUser = null;
     for (const [key, data] of Object.entries(keysData.keys)) {
-        if (data.activated && data.username === username && data.user_id === userId) {
-            foundUser = { id: data.user_id, username: data.username };
-            break;
+        for (const user of data.users) {
+            if (user.username === username && user.user_id === userId) {
+                foundUser = { id: user.user_id, username: user.username };
+                break;
+            }
         }
     }
     if (foundUser) res.json({ success: true, user: foundUser });
@@ -522,7 +583,11 @@ app.get('/api/user/:userId', async (req, res) => {
     const { userId } = req.params;
     const keysData = await getAllKeys();
     for (const [key, data] of Object.entries(keysData.keys)) {
-        if (data.activated && data.user_id === userId) return res.json({ success: true, user: { id: data.user_id, username: data.username } });
+        for (const user of data.users) {
+            if (user.user_id === userId) {
+                return res.json({ success: true, user: { id: user.user_id, username: user.username } });
+            }
+        }
     }
     res.status(404).json({ error: 'Пользователь не найден' });
 });
@@ -572,14 +637,17 @@ app.get('/api/notifications/:userId', async (req, res) => {
 
 app.get('/health', async (req, res) => {
     const keysData = await getAllKeys();
-    const activatedCount = Object.values(keysData.keys).filter(k => k.activated).length;
+    let activatedCount = 0;
+    for (const [key, data] of Object.entries(keysData.keys)) {
+        activatedCount += data.users.length;
+    }
     const dialogFiles = await fs.readdir(DIALOGS_DIR).catch(() => []);
     const notificationsData = await getAllNotifications();
     const settings = await getSettings();
     res.json({
         status: 'ok',
         total_keys: Object.keys(keysData.keys).length,
-        activated_keys: activatedCount,
+        activated_users: activatedCount,
         dialogs_count: dialogFiles.length,
         notifications_count: notificationsData.notifications.length,
         auto_cleanup_enabled: settings.auto_cleanup_enabled,
@@ -588,33 +656,28 @@ app.get('/health', async (req, res) => {
     });
 });
 
-// Получение всех диалогов пользователя
 app.get('/api/user_dialogs/:userId', async (req, res) => {
     const { userId } = req.params;
-
     try {
         const dialogFiles = await fs.readdir(DIALOGS_DIR);
         const userDialogs = [];
-
         for (const file of dialogFiles) {
             const [user1, user2] = file.replace('.json', '').split('_');
             if (user1 === userId || user2 === userId) {
                 const dialogPath = path.join(DIALOGS_DIR, file);
                 const data = await fs.readFile(dialogPath, 'utf-8');
                 const dialog = JSON.parse(data);
-
                 const otherId = user1 === userId ? user2 : user1;
-
-                // Получаем имя другого пользователя
                 let otherName = otherId;
                 const keysData = await getAllKeys();
-                for (const [key, userData] of Object.entries(keysData.keys)) {
-                    if (userData.activated && userData.user_id === otherId) {
-                        otherName = userData.username;
-                        break;
+                for (const [key, keyData] of Object.entries(keysData.keys)) {
+                    for (const user of keyData.users) {
+                        if (user.user_id === otherId) {
+                            otherName = user.username;
+                            break;
+                        }
                     }
                 }
-
                 userDialogs.push({
                     user_id: otherId,
                     username: otherName,
@@ -623,7 +686,6 @@ app.get('/api/user_dialogs/:userId', async (req, res) => {
                 });
             }
         }
-
         res.json({ dialogs: userDialogs });
     } catch (error) {
         console.error('Ошибка получения диалогов:', error);
