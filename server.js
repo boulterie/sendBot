@@ -588,6 +588,49 @@ app.get('/health', async (req, res) => {
     });
 });
 
+// Получение всех диалогов пользователя
+app.get('/api/user_dialogs/:userId', async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const dialogFiles = await fs.readdir(DIALOGS_DIR);
+        const userDialogs = [];
+
+        for (const file of dialogFiles) {
+            const [user1, user2] = file.replace('.json', '').split('_');
+            if (user1 === userId || user2 === userId) {
+                const dialogPath = path.join(DIALOGS_DIR, file);
+                const data = await fs.readFile(dialogPath, 'utf-8');
+                const dialog = JSON.parse(data);
+
+                const otherId = user1 === userId ? user2 : user1;
+
+                // Получаем имя другого пользователя
+                let otherName = otherId;
+                const keysData = await getAllKeys();
+                for (const [key, userData] of Object.entries(keysData.keys)) {
+                    if (userData.activated && userData.user_id === otherId) {
+                        otherName = userData.username;
+                        break;
+                    }
+                }
+
+                userDialogs.push({
+                    user_id: otherId,
+                    username: otherName,
+                    created_at: dialog.created_at,
+                    has_messages: dialog.messages.length > 0
+                });
+            }
+        }
+
+        res.json({ dialogs: userDialogs });
+    } catch (error) {
+        console.error('Ошибка получения диалогов:', error);
+        res.json({ dialogs: [] });
+    }
+});
+
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
 
 // ============ ЗАПУСК ============
