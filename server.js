@@ -18,6 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ============ КОНСТАНТЫ ============
 const DEFAULT_DIALOG_LIFETIME_DAYS = 7;
+const MOSCOW_OFFSET = 3 * 60 * 60 * 1000; // Москва UTC+3
 
 // ============ ПУТИ К ДАННЫМ ============
 const DATA_DIR = path.join(__dirname, 'data');
@@ -30,11 +31,17 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
+// Функция получения московского времени
+function getMoscowTime() {
+    return Date.now() + MOSCOW_OFFSET;
+}
+
 console.log('========================================');
 console.log('🔐 НАСТРОЙКИ СЕРВЕРА:');
 console.log(`   Порт: ${PORT}`);
 console.log(`   Папка данных: ${DATA_DIR}`);
 console.log(`   Пароль админа: ${ADMIN_PASSWORD === 'admin123' ? 'admin123 (по умолчанию)' : 'установлен'}`);
+console.log(`   Часовой пояс: MSK (UTC+3)`);
 console.log('========================================\n');
 
 // ============ ИНИЦИАЛИЗАЦИЯ ХРАНИЛИЩА ============
@@ -95,7 +102,7 @@ function generateKey() {
 async function createKey(daysValid, hwidCheckEnabled = true) {
     const keysData = await getAllKeys();
     const key = generateKey();
-    const now = Date.now();
+    const now = getMoscowTime();
 
     keysData.keys[key] = {
         key: key,
@@ -162,7 +169,7 @@ async function activateKey(key, username, hwid = null) {
         if (!idExists) isUnique = true;
     }
 
-    const now = Date.now();
+    const now = getMoscowTime();
     const expiresAt = now + (keyData.days_valid * 24 * 60 * 60 * 1000);
 
     keyData.activated = true;
@@ -183,7 +190,7 @@ async function checkKey(key, username, hwid = null) {
     const keyData = keysData.keys[key];
     if (!keyData.activated) return { success: false, error: 'Ключ не активирован' };
     if (keyData.username !== username) return { success: false, error: 'Имя не соответствует ключу' };
-    if (Date.now() > keyData.expires_at) return { success: false, error: 'Срок действия ключа истёк' };
+    if (getMoscowTime() > keyData.expires_at) return { success: false, error: 'Срок действия ключа истёк' };
     if (keyData.hwid_check_enabled && keyData.hwid && (!hwid || keyData.hwid !== hwid)) return { success: false, error: 'HWID не совпадает. Доступ запрещён.' };
     return { success: true, userId: keyData.user_id, username: keyData.username, expiresAt: keyData.expires_at };
 }
@@ -205,21 +212,59 @@ async function getDialog(user1, user2) {
         const data = await fs.readFile(dialogFile, 'utf-8');
         return JSON.parse(data);
     } catch {
-        return { created_at: Date.now(), messages: [] };
+        return { created_at: getMoscowTime(), messages: [] };
     }
 }
 
 async function saveDialog(user1, user2, dialog) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
-    if (!dialog.created_at) dialog.created_at = Date.now();
+    if (!dialog.created_at) dialog.created_at = getMoscowTime();
     await fs.writeFile(dialogFile, JSON.stringify(dialog, null, 2));
 }
 
+async function deleteDialogWithImages(user1, user2) {
+    const dialogId = [user1, user2].sort().join('_');
+    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
+
+    try {
+        // Получаем диалог перед удалением
+        const data = await fs.readFile(dialogFile, 'utf-8');
+        const dialog = JSON.parse(data);
+
+        // Удаляем все картинки из диалога
+        for (const message of dialog.messages) {
+            if (message.is_image && message.image_url) {
+                const imageName = message.image_url.split('/').pop();
+                const imagePath = path.join(IMAGES_DIR, imageName);
+                try {
+                    await fs.unlink(imagePath);
+                    console.log(`🗑️ Удалено изображение: ${imageName}`);
+                } catch (err) {
+                    // Игнорируем ошибки удаления картинок
+                }
+            }
+        }
+
+        // Удаляем файл диалога
+        await fs.unlink(dialogFile);
+        console.log(`🗑️ Удалён диалог: ${dialogId} и связанные изображения`);
+        return { success: true };
+    } catch {
+        return { success: false };
+    }
+}
+
+// Простое удаление диалога (для API)
 async function deleteDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
-    try { await fs.unlink(dialogFile); return { success: true }; } catch { return { success: false }; }
+    try {
+        await fs.unlink(dialogFile);
+        return { success: true };
+    } catch {
+        return { success: false };
+    }
 }
 
 async function saveImage(imageData, messageId) {
@@ -229,6 +274,7 @@ async function saveImage(imageData, messageId) {
     return `/api/images/${messageId}.jpg`;
 }
 
+// Фоновая очистка старых диалогов (каждые 5 минут)
 async function cleanupOldDialogs() {
     const settings = await getSettings();
     if (!settings.auto_cleanup_enabled) { console.log('⚠️ Автоочистка диалогов отключена'); return; }
@@ -236,14 +282,15 @@ async function cleanupOldDialogs() {
     try {
         const dialogFiles = await fs.readdir(DIALOGS_DIR);
         let deletedCount = 0;
-        const now = Date.now();
+        const now = getMoscowTime();
         for (const file of dialogFiles) {
             const dialogPath = path.join(DIALOGS_DIR, file);
             try {
                 const data = await fs.readFile(dialogPath, 'utf-8');
                 const dialog = JSON.parse(data);
                 if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
-                    await fs.unlink(dialogPath);
+                    // Удаляем диалог вместе с картинками
+                    await deleteDialogWithImagesByFile(dialogPath, dialog);
                     deletedCount++;
                     console.log(`🗑️ Удалён устаревший диалог: ${file}`);
                 }
@@ -253,7 +300,43 @@ async function cleanupOldDialogs() {
     } catch (error) { console.error('Ошибка очистки диалогов:', error); }
 }
 
-// ============ ФУНКЦИИ РАБОТЫ С УВЕДОМЛЕНИЯМИ (упрощённые) ============
+// Удаление диалога по пути файла с картинками
+async function deleteDialogWithImagesByFile(dialogPath, dialog) {
+    try {
+        // Удаляем картинки
+        for (const message of dialog.messages) {
+            if (message.is_image && message.image_url) {
+                const imageName = message.image_url.split('/').pop();
+                const imagePath = path.join(IMAGES_DIR, imageName);
+                try {
+                    await fs.unlink(imagePath);
+                } catch (err) {
+                    // Игнорируем
+                }
+            }
+        }
+        await fs.unlink(dialogPath);
+        return { success: true };
+    } catch {
+        return { success: false };
+    }
+}
+
+// Проверка истечения диалога
+async function checkAndDeleteExpiredDialog(user1, user2) {
+    const dialog = await getDialog(user1, user2);
+    const settings = await getSettings();
+    const now = getMoscowTime();
+    const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
+
+    if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
+        await deleteDialogWithImages(user1, user2);
+        return { expired: true, deleted: true };
+    }
+    return { expired: false };
+}
+
+// ============ ФУНКЦИИ РАБОТЫ С УВЕДОМЛЕНИЯМИ ============
 async function getAllNotifications() {
     try {
         const data = await fs.readFile(NOTIFICATIONS_FILE, 'utf-8');
@@ -274,7 +357,7 @@ async function addNotification(title, message, sender = 'admin') {
         title: title,
         message: message,
         sender: sender,
-        timestamp: Math.floor(Date.now() / 1000)
+        timestamp: Math.floor(getMoscowTime() / 1000)
     };
     notificationsData.notifications.unshift(notification);
     if (notificationsData.notifications.length > 200) notificationsData.notifications = notificationsData.notifications.slice(0, 200);
@@ -293,7 +376,6 @@ async function deleteNotification(notificationId) {
     return { success: true };
 }
 
-// Упрощённая функция получения уведомлений (без read_by)
 async function getUserNotifications(userId, lastId = 0) {
     const notificationsData = await getAllNotifications();
     return notificationsData.notifications.filter(n => n.id > lastId);
@@ -428,7 +510,7 @@ app.post('/api/send', async (req, res) => {
         is_image: is_image || false,
         image_url: imageUrl,
         image_data: is_image ? image_data : null,
-        timestamp: Math.floor(Date.now() / 1000)
+        timestamp: Math.floor(getMoscowTime() / 1000)
     };
     const dialog = await getDialog(from, to);
     dialog.messages.push(message);
@@ -477,12 +559,12 @@ app.get('/api/user/:userId', async (req, res) => {
     res.status(404).json({ error: 'Пользователь не найден' });
 });
 
-// Информация о диалоге
+// Информация о диалоге (с московским временем)
 app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     const { userId, chatId } = req.params;
     const dialog = await getDialog(userId, chatId);
     const settings = await getSettings();
-    const now = Date.now();
+    const now = getMoscowTime();
     const created_at = dialog.created_at || now;
     const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
     const expires_at = created_at + lifetimeMs;
@@ -490,7 +572,7 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     res.json({
         created_at: created_at,
         expires_at: expires_at,
-        time_left_ms: time_left,
+        time_left_ms: Math.max(0, time_left),
         time_left_hours: Math.max(0, Math.floor(time_left / (1000 * 60 * 60))),
         time_left_days: Math.max(0, Math.floor(time_left / (1000 * 60 * 60 * 24))),
         is_expired: time_left <= 0,
@@ -498,16 +580,24 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     });
 });
 
-// Удаление диалога
+// Удаление диалога (с картинками)
 app.delete('/api/delete_dialog', async (req, res) => {
     const { user1, user2 } = req.body;
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
-    const result = await deleteDialog(user1, user2);
+    const result = await deleteDialogWithImages(user1, user2);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: 'Диалог не найден' });
 });
 
-// Уведомления для клиента (упрощённые, без read_by)
+// Проверка истечения диалога
+app.post('/api/check_dialog_expiry', async (req, res) => {
+    const { user1, user2 } = req.body;
+    if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
+    const result = await checkAndDeleteExpiredDialog(user1, user2);
+    res.json(result);
+});
+
+// Уведомления для клиента
 app.get('/api/notifications/:userId', async (req, res) => {
     const { userId } = req.params;
     const lastId = parseInt(req.query.last_id) || 0;
@@ -530,7 +620,7 @@ app.get('/health', async (req, res) => {
         notifications_count: notificationsData.notifications.length,
         auto_cleanup_enabled: settings.auto_cleanup_enabled,
         dialog_lifetime_days: settings.dialog_lifetime_days,
-        timestamp: Date.now()
+        timestamp: getMoscowTime()
     });
 });
 
@@ -540,7 +630,7 @@ app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.
 // ============ ЗАПУСК ============
 async function start() {
     await initDataStorage();
-    setInterval(cleanupOldDialogs, 60 * 60 * 1000);
+    setInterval(cleanupOldDialogs, 5 * 60 * 1000); // Каждые 5 минут
     cleanupOldDialogs();
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`\n${'='.repeat(50)}`);
@@ -550,6 +640,7 @@ async function start() {
         console.log(`📁 Данные: ${DATA_DIR}`);
         console.log(`🔐 Админ панель: https://msgsendlerpro.bothost.tech/`);
         console.log(`📊 Health: https://msgsendlerpro.bothost.tech/health`);
+        console.log(`🕐 Часовой пояс: MSK (UTC+3)`);
         console.log(`${'='.repeat(50)}\n`);
     });
 }
