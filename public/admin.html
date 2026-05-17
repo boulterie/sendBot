@@ -690,8 +690,8 @@
                                 <th class="sortable" onclick="sortKeys('key')" style="min-width: 200px;">🔑 Ключ</th>
                                 <th class="sortable" onclick="sortKeys('created_at')">📅 Создан</th>
                                 <th class="sortable" onclick="sortKeys('days_valid')">⏱️ Дней</th>
-                                <th>📊 Статус</th>
-                                <th class="sortable" onclick="sortKeys('activated_at')">📅 Активирован</th>
+                                <th class="sortable" onclick="sortKeys('status')">📊 Статус</th>
+                                <th>📅 Активирован</th>
                                 <th class="sortable" onclick="sortKeys('expires_at')">⏰ Истекает</th>
                                 <th>👥 Пользователи</th>
                                 <th>🆔 ID</th>
@@ -934,9 +934,16 @@
                 } else if (currentSort.field === 'days_valid') {
                     aVal = a.days_valid || 0;
                     bVal = b.days_valid || 0;
-                } else if (currentSort.field === 'activated_at') {
-                    aVal = a.activated_at || 0;
-                    bVal = b.activated_at || 0;
+                } else if (currentSort.field === 'status') {
+                    // Сортируем по статусу: активен (1) > не активирован (2) > истёк (3)
+                    const getStatusValue = (keyData) => {
+                        if (keyData.activated && keyData.expires_at > Date.now()) return 1;
+                        if (!keyData.activated) return 2;
+                        if (keyData.activated && keyData.expires_at <= Date.now()) return 3;
+                        return 2;
+                    };
+                    aVal = getStatusValue(a);
+                    bVal = getStatusValue(b);
                 } else if (currentSort.field === 'expires_at') {
                     aVal = a.expires_at || 0;
                     bVal = b.expires_at || 0;
