@@ -130,7 +130,7 @@
             background: rgba(220, 53, 69, 1);
         }
 
-        /* Статистика - 3 карточки на всю ширину */
+        /* Статистика */
         .stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -243,6 +243,58 @@
             cursor: pointer;
         }
 
+        /* Панель управления столбцами */
+        .columns-panel {
+            background: rgba(20, 20, 25, 0.5);
+            border-radius: 12px;
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .columns-panel span {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .column-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
+            background: rgba(30, 30, 35, 0.8);
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .column-toggle:hover {
+            background: rgba(50, 50, 55, 0.8);
+        }
+
+        .column-toggle.hidden {
+            opacity: 0.5;
+        }
+
+        .expand-all-btn {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            padding: 5px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #4CAF50;
+            transition: all 0.2s;
+        }
+
+        .expand-all-btn:hover {
+            background: rgba(76, 175, 80, 0.4);
+        }
+
         /* Таблица */
         .table-container {
             overflow-x: auto;
@@ -255,7 +307,7 @@
         }
 
         th, td {
-            padding: 12px;
+            padding: 12px 10px;
             text-align: left;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             vertical-align: top;
@@ -265,18 +317,33 @@
             background: rgba(20, 20, 25, 0.8);
             font-weight: bold;
             color: #4CAF50;
-            cursor: pointer;
             user-select: none;
             white-space: nowrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
         }
 
-        th:hover {
+        th.sortable {
+            cursor: pointer;
+        }
+
+        th.sortable:hover {
             background: rgba(30, 30, 35, 0.9);
         }
 
         th.sortable::after {
             content: ' ↕';
             opacity: 0.5;
+        }
+
+        td {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        td:first-child {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
         }
 
         tr:hover {
@@ -307,12 +374,15 @@
         .user-line {
             white-space: pre-line;
             line-height: 1.6;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
         }
 
         button.btn-small {
             padding: 6px 12px;
             font-size: 12px;
             margin: 2px;
+            font-family: 'Segoe UI', sans-serif;
         }
 
         .btn {
@@ -322,6 +392,7 @@
             cursor: pointer;
             font-weight: bold;
             transition: all 0.3s;
+            font-family: 'Segoe UI', sans-serif;
         }
 
         .btn-primary {
@@ -374,6 +445,8 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 10px;
             color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
         }
 
         .search-box button {
@@ -595,6 +668,26 @@
         .lifetime-input-group select {
             width: auto;
         }
+
+        /* Стрелка разворачивания */
+        .expand-btn {
+            background: none;
+            border: none;
+            color: #4CAF50;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .expand-btn:hover {
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .hidden-column {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -667,26 +760,42 @@
                 </div>
 
                 <h2>📋 Список ключей</h2>
+
+                <!-- Панель управления столбцами -->
+                <div class="columns-panel">
+                    <span>📊 Показать столбцы:</span>
+                    <label class="column-toggle" onclick="toggleColumn('hwid')">
+                        <span>🔑 HWID</span>
+                    </label>
+                    <label class="column-toggle" onclick="toggleColumn('slots')">
+                        <span>📦 Слоты</span>
+                    </label>
+                    <label class="column-toggle" onclick="toggleColumn('activated')">
+                        <span>✅ Активирован</span>
+                    </label>
+                    <button class="expand-all-btn" onclick="expandAllColumns()">📂 Развернуть все</button>
+                    <button class="expand-all-btn" onclick="collapseAllColumns()">📁 Свернуть все</button>
+                </div>
+
                 <div class="table-container">
                     <table id="keysTable">
                         <thead>
                             <tr>
-                                <th class="sortable" onclick="sortKeys('key')" style="min-width: 200px;">Ключ</th>
-                                <th class="sortable" onclick="sortKeys('created_at')">Создан</th>
-                                <th class="sortable" onclick="sortKeys('days_valid')">Дней</th>
-                                <th>Статус</th>
-                                <th class="sortable" onclick="sortKeys('activated_at')">Активирован</th>
-                                <th class="sortable" onclick="sortKeys('expires_at')">Истекает</th>
-                                <th style="min-width: 150px;">Пользователи</th>
-                                <th style="min-width: 120px;">ID</th>
-                                <th style="min-width: 150px;">HWID</th>
-                                <th>HWID</th>
-                                <th>Слотов</th>
-                                <th>Действия</th>
+                                <th class="sortable" onclick="sortKeys('key')" style="min-width: 200px;">🔑 Ключ</th>
+                                <th class="sortable" onclick="sortKeys('created_at')">📅 Создан</th>
+                                <th class="sortable" onclick="sortKeys('days_valid')">⏱️ Дней</th>
+                                <th id="thStatus">📊 Статус</th>
+                                <th class="sortable" onclick="sortKeys('activated_at')" id="thActivatedDate">📅 Активирован</th>
+                                <th class="sortable" onclick="sortKeys('expires_at')">⏰ Истекает</th>
+                                <th>👥 Пользователи</th>
+                                <th>🆔 ID</th>
+                                <th id="thHwid">💾 HWID</th>
+                                <th id="thSlots">🎫 Слотов</th>
+                                <th id="thActions">⚡ Действия</th>
                             </tr>
                         </thead>
                         <tbody id="keysTableBody">
-                            <tr><td colspan="12">Загрузка...</td></tr>
+                            <tr><td colspan="11">Загрузка...</td></td>
                         </tbody>
                     </table>
                 </div>
@@ -775,12 +884,26 @@
     <script>
         let isLoggedIn = false;
         let allKeys = {};
-        let currentSort = { field: 'created_at', order: 'desc' };
+        let currentSort = { field: 'key', order: 'asc' };
         let currentSearch = '';
         let editUsers = [];
 
-        // Форматирование даты
-        function formatDate(timestamp) {
+        // Состояние видимости столбцов
+        let columnVisibility = {
+            hwid: false,
+            slots: false,
+            activated: false
+        };
+
+        // Форматирование даты (только дата, без времени)
+        function formatDateOnly(timestamp) {
+            if (!timestamp) return '—';
+            const date = new Date(timestamp);
+            return date.toLocaleDateString('ru-RU');
+        }
+
+        // Форматирование полной даты для всплывающей подсказки
+        function formatFullDate(timestamp) {
             if (!timestamp) return '—';
             return new Date(timestamp).toLocaleString('ru-RU');
         }
@@ -793,6 +916,30 @@
             if (diff <= 0) return 'Истёк';
             const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
             return `${days} дн.`;
+        }
+
+        // Переключение видимости столбцов
+        function toggleColumn(column) {
+            columnVisibility[column] = !columnVisibility[column];
+            const toggleEl = document.querySelector(`.column-toggle:has(span:contains('${column === 'hwid' ? 'HWID' : (column === 'slots' ? 'Слоты' : 'Активирован')}')`);
+            if (toggleEl) {
+                if (columnVisibility[column]) {
+                    toggleEl.classList.remove('hidden');
+                } else {
+                    toggleEl.classList.add('hidden');
+                }
+            }
+            renderKeys();
+        }
+
+        function expandAllColumns() {
+            columnVisibility = { hwid: true, slots: true, activated: true };
+            renderKeys();
+        }
+
+        function collapseAllColumns() {
+            columnVisibility = { hwid: false, slots: false, activated: false };
+            renderKeys();
         }
 
         // Переключение вкладок
@@ -946,30 +1093,35 @@
                     ? keyData.users.map(u => u.hwid ? u.hwid : '—').join('\n\n')
                     : '—';
 
-                row.innerHTML = `
+                let rowHTML = `
                     <td><span class="key-code">${keyData.key}</span></td>
-                    <td style="white-space: nowrap;">${formatDate(keyData.created_at)}</td>
+                    <td title="${formatFullDate(keyData.created_at)}">${formatDateOnly(keyData.created_at)}</td>
                     <td>${keyData.days_valid}</td>
                     <td class="${isActive ? 'status-active' : (isExpired ? 'status-expired' : 'status-inactive')}">
                         ${isActive ? '✅ Активен' : (isExpired ? '⛔ Истёк' : '⚪ Не активирован')}
                     </td>
-                    <td style="white-space: nowrap;">${keyData.activated_at ? formatDate(keyData.activated_at) : '—'}</td>
-                    <td style="white-space: nowrap;">${keyData.expires_at ? formatDate(keyData.expires_at) + ' (' + getDaysLeft(keyData.expires_at) + ')' : '—'}</td>
+                    <td class="${columnVisibility.activated ? '' : 'hidden-column'}" title="${keyData.activated_at ? formatFullDate(keyData.activated_at) : '—'}">
+                        ${keyData.activated_at ? formatDateOnly(keyData.activated_at) : '—'}
+                    </td>
+                    <td title="${keyData.expires_at ? formatFullDate(keyData.expires_at) : '—'}">
+                        ${keyData.expires_at ? formatDateOnly(keyData.expires_at) + ' (' + getDaysLeft(keyData.expires_at) + ')' : '—'}
+                    </td>
                     <td class="user-line">${usernames}</td>
                     <td class="user-line">${userIds}</td>
-                    <td class="user-line" style="font-family: monospace; font-size: 11px;">${hwids}</td>
-                    <td style="text-align: center; font-size: 18px;">${keyData.hwid_check_enabled ? '✅' : '❌'}</td>
-                    <td>${keyData.activations_left !== undefined ? keyData.activations_left : (keyData.users ? 2 - keyData.users.length : 2)}</td>
+                    <td class="${columnVisibility.hwid ? '' : 'hidden-column'} user-line" style="font-family: monospace; font-size: 11px;">${hwids}</td>
+                    <td class="${columnVisibility.slots ? '' : 'hidden-column'}">${keyData.activations_left !== undefined ? keyData.activations_left : (keyData.users ? 2 - keyData.users.length : 2)}</td>
                     <td>
                         <button class="btn-small btn-warning" onclick="editKey('${keyData.key}')">✏️ Ред.</button>
                         <button class="btn-small btn-secondary" onclick="resetKey('${keyData.key}')">🔄 Сброс</button>
                         <button class="btn-small btn-danger" onclick="deleteKey('${keyData.key}')">🗑️ Удал.</button>
                     </td>
                 `;
+
+                row.innerHTML = rowHTML;
             }
 
             if (keysArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="12">Ключи не найдены</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11">Ключи не найдены</td>' + '</tr>';
             }
         }
 
@@ -1039,7 +1191,6 @@
             document.getElementById('editActivated').checked = keyData.activated;
             document.getElementById('editSlotsLeft').value = keyData.activations_left;
 
-            // Копируем пользователей для редактирования
             editUsers = keyData.users ? [...keyData.users] : [];
             renderEditUsers();
 
@@ -1105,7 +1256,6 @@
             const activated = document.getElementById('editActivated').checked;
             const slotsLeft = parseInt(document.getElementById('editSlotsLeft').value);
 
-            // Собираем обновленных пользователей
             const updatedUsers = [];
             for (let i = 0; i < editUsers.length; i++) {
                 const removeCheckbox = document.querySelector(`.edit-remove-${i}`);
@@ -1125,17 +1275,13 @@
                 }
             }
 
-            // Обновляем ключ через API
             try {
-                // Сначала обновляем базовые параметры
                 await fetch(`/api/admin/update_key/${currentEditKey}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ days_valid: days, hwid_check_enabled: hwidCheck })
                 });
 
-                // Для полного обновления пользователей используем сброс и повторную активацию
-                // или напрямую записываем в файл (проще через отдельный эндпоинт)
                 const response = await fetch(`/api/admin/update_key_full/${currentEditKey}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
