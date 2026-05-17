@@ -233,6 +233,29 @@ async function deleteDialog(user1, user2) {
     }
 }
 
+// Проверка существования диалога (новый эндпоинт)
+async function dialogExists(user1, user2) {
+    const dialogId = [user1, user2].sort().join('_');
+    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
+
+    try {
+        await fs.access(dialogFile);
+        // Файл существует, проверяем не истёк ли
+        const data = await fs.readFile(dialogFile, 'utf-8');
+        const dialog = JSON.parse(data);
+        const settings = await getSettings();
+        const now = getMoscowTime();
+        const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
+
+        if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
+            return { exists: false, expired: true };
+        }
+        return { exists: true, expired: false };
+    } catch {
+        return { exists: false, expired: false };
+    }
+}
+
 // Проверка истечения диалога
 async function checkAndDeleteExpiredDialog(user1, user2) {
     const dialog = await getDialog(user1, user2);
@@ -431,7 +454,14 @@ app.post('/api/find_user', async (req, res) => {
     else res.json({ success: false, error: 'Пользователь не найден' });
 });
 
-// Отправка сообщения (с сохранением image_data в JSON)
+// Проверка существования диалога (новый эндпоинт)
+app.get('/api/dialog_exists/:userId/:chatId', async (req, res) => {
+    const { userId, chatId } = req.params;
+    const result = await dialogExists(userId, chatId);
+    res.json(result);
+});
+
+// Отправка сообщения
 app.post('/api/send', async (req, res) => {
     const { from, to, text, is_image, image_data } = req.body;
 
@@ -449,13 +479,11 @@ app.post('/api/send', async (req, res) => {
         timestamp: Math.floor(getMoscowTime() / 1000)
     };
 
-    // Сохраняем для получателя
     const dialogTo = await getDialog(from, to);
     dialogTo.messages.push(message);
     if (dialogTo.messages.length > 100) dialogTo.messages = dialogTo.messages.slice(-100);
     await saveDialog(from, to, dialogTo);
 
-    // Сохраняем для отправителя
     const dialogFrom = await getDialog(to, from);
     dialogFrom.messages.push(message);
     if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
@@ -514,7 +542,8 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
         time_left_hours: Math.max(0, Math.floor(time_left / (1000 * 60 * 60))),
         time_left_days: Math.max(0, Math.floor(time_left / (1000 * 60 * 60 * 24))),
         is_expired: time_left <= 0,
-        lifetime_days: settings.dialog_lifetime_days
+        lifetime_days: settings.dialog_lifetime_days,
+        messages_count: dialog.messages.length
     });
 });
 
@@ -568,7 +597,7 @@ app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.
 // ============ ЗАПУСК ============
 async function start() {
     await initDataStorage();
-    setInterval(cleanupOldDialogs, 5 * 60 * 1000); // Каждые 5 минут
+    setInterval(cleanupOldDialogs, 5 * 60 * 1000);
     cleanupOldDialogs();
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`\n${'='.repeat(50)}`);
