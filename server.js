@@ -484,6 +484,35 @@ app.delete('/api/admin/delete_notification/:id', async (req, res) => {
     else res.status(404).json({ error: result.error });
 });
 
+app.put('/api/admin/update_key_full/:key', async (req, res) => {
+    const { key } = req.params;
+    const { days_valid, hwid_check_enabled, activated, activations_left, users } = req.body;
+
+    const keysData = await getAllKeys();
+    if (!keysData.keys[key]) {
+        return res.status(404).json({ error: 'Ключ не найден' });
+    }
+
+    const keyData = keysData.keys[key];
+
+    // Обновляем параметры
+    if (days_valid !== undefined) keyData.days_valid = days_valid;
+    if (hwid_check_enabled !== undefined) keyData.hwid_check_enabled = hwid_check_enabled;
+    if (activated !== undefined) keyData.activated = activated;
+    if (activations_left !== undefined) keyData.activations_left = activations_left;
+    if (users !== undefined) keyData.users = users;
+
+    // Пересчитываем дату истечения если нужно
+    if (keyData.users && keyData.users.length > 0 && !keyData.expires_at) {
+        const now = getMoscowTime();
+        keyData.expires_at = now + (keyData.days_valid * 24 * 60 * 60 * 1000);
+    }
+
+    await saveKeys(keysData);
+    console.log(`✏️ Полное обновление ключа: ${key}`);
+    res.json({ success: true });
+});
+
 // ============ КЛИЕНТСКИЕ ЭНДПОИНТЫ ============
 
 app.post('/api/register', async (req, res) => {
