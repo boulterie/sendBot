@@ -30,7 +30,6 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-// Функция получения московского времени
 function getMoscowTime() {
     return Date.now() + MOSCOW_OFFSET;
 }
@@ -221,7 +220,6 @@ async function saveDialog(user1, user2, dialog) {
     await fs.writeFile(dialogFile, JSON.stringify(dialog, null, 2));
 }
 
-// Удаление диалога
 async function deleteDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
@@ -233,7 +231,6 @@ async function deleteDialog(user1, user2) {
     }
 }
 
-// Создание нового пустого диалога
 async function createEmptyDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
@@ -252,7 +249,6 @@ async function createEmptyDialog(user1, user2) {
     }
 }
 
-// Проверка существования диалога
 async function dialogExists(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
@@ -274,7 +270,6 @@ async function dialogExists(user1, user2) {
     }
 }
 
-// Проверка истечения диалога
 async function checkAndDeleteExpiredDialog(user1, user2) {
     const dialog = await getDialog(user1, user2);
     const settings = await getSettings();
@@ -288,7 +283,6 @@ async function checkAndDeleteExpiredDialog(user1, user2) {
     return { expired: false };
 }
 
-// Фоновая очистка старых диалогов (каждые 5 минут)
 async function cleanupOldDialogs() {
     const settings = await getSettings();
     if (!settings.auto_cleanup_enabled) { console.log('⚠️ Автоочистка диалогов отключена'); return; }
@@ -310,7 +304,7 @@ async function cleanupOldDialogs() {
             } catch (err) { console.error(`Ошибка обработки ${file}:`, err); }
         }
         if (deletedCount > 0) console.log(`✅ Очистка завершена. Удалено диалогов: ${deletedCount}`);
-    } catch (error) { console.error('Ошибка очистки диалогов:', error);
+    } catch (error) { console.error('Ошибка очистки диалогов:', error); }
 }
 
 // ============ ФУНКЦИИ РАБОТЫ С УВЕДОМЛЕНИЯМИ ============
@@ -360,14 +354,12 @@ async function getUserNotifications(userId, lastId = 0) {
 
 // ============ API ЭНДПОИНТЫ ============
 
-// Админ-логин
 app.post('/api/admin/login', (req, res) => {
     const { password } = req.body;
     if (password === ADMIN_PASSWORD) res.json({ success: true });
     else res.status(401).json({ success: false, error: 'Неверный пароль' });
 });
 
-// Ключи
 app.get('/api/admin/keys', async (req, res) => { const keysData = await getAllKeys(); res.json({ keys: keysData.keys }); });
 app.post('/api/admin/generate_key', async (req, res) => {
     const { days, hwid_check } = req.body;
@@ -409,7 +401,6 @@ app.post('/api/admin/search_keys', async (req, res) => {
     res.json({ keys: results });
 });
 
-// Настройки
 app.get('/api/admin/settings', async (req, res) => { const settings = await getSettings(); res.json(settings); });
 app.post('/api/admin/settings', async (req, res) => {
     const { dialog_lifetime_days, auto_cleanup_enabled } = req.body;
@@ -420,7 +411,6 @@ app.post('/api/admin/settings', async (req, res) => {
     res.json({ success: true, settings });
 });
 
-// Уведомления (админ)
 app.get('/api/admin/notifications', async (req, res) => { const notificationsData = await getAllNotifications(); res.json({ notifications: notificationsData.notifications }); });
 app.post('/api/admin/send_notification', async (req, res) => {
     const { title, message } = req.body;
@@ -437,7 +427,6 @@ app.delete('/api/admin/delete_notification/:id', async (req, res) => {
 
 // ============ КЛИЕНТСКИЕ ЭНДПОИНТЫ ============
 
-// Регистрация/вход
 app.post('/api/register', async (req, res) => {
     const { username, key, hwid } = req.body;
     if (!username || username.length < 2) return res.status(400).json({ error: 'Имя должно содержать минимум 2 символа' });
@@ -447,7 +436,6 @@ app.post('/api/register', async (req, res) => {
     else res.status(401).json({ error: result.error });
 });
 
-// Активация ключа
 app.post('/api/activate', async (req, res) => {
     const { username, key, hwid } = req.body;
     if (!username || username.length < 2) return res.status(400).json({ error: 'Имя должно содержать минимум 2 символа' });
@@ -457,7 +445,6 @@ app.post('/api/activate', async (req, res) => {
     else res.status(401).json({ error: result.error });
 });
 
-// Поиск пользователя
 app.post('/api/find_user', async (req, res) => {
     const { username, userId } = req.body;
     const keysData = await getAllKeys();
@@ -472,33 +459,23 @@ app.post('/api/find_user', async (req, res) => {
     else res.json({ success: false, error: 'Пользователь не найден' });
 });
 
-// Создание нового диалога
 app.post('/api/create_dialog', async (req, res) => {
     const { user1, user2 } = req.body;
-
-    if (!user1 || !user2) {
-        return res.status(400).json({ error: 'Недостаточно данных' });
-    }
-
+    if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
     const result = await createEmptyDialog(user1, user2);
     res.json(result);
 });
 
-// Проверка существования диалога
 app.get('/api/dialog_exists/:userId/:chatId', async (req, res) => {
     const { userId, chatId } = req.params;
     const result = await dialogExists(userId, chatId);
     res.json(result);
 });
 
-// Отправка сообщения
 app.post('/api/send', async (req, res) => {
     const { from, to, text, is_image, image_data } = req.body;
-
     if (!from || !to) return res.status(400).json({ error: 'Недостаточно данных' });
-
     const messageId = Date.now();
-
     const message = {
         id: messageId,
         from: from,
@@ -508,22 +485,18 @@ app.post('/api/send', async (req, res) => {
         image_data: is_image ? image_data : null,
         timestamp: Math.floor(getMoscowTime() / 1000)
     };
-
     const dialogTo = await getDialog(from, to);
     dialogTo.messages.push(message);
     if (dialogTo.messages.length > 100) dialogTo.messages = dialogTo.messages.slice(-100);
     await saveDialog(from, to, dialogTo);
-
     const dialogFrom = await getDialog(to, from);
     dialogFrom.messages.push(message);
     if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
     await saveDialog(to, from, dialogFrom);
-
     console.log(`📨 ${from} -> ${to}: ${is_image ? '[Изображение]' : text.substring(0, 50)}`);
     res.json({ success: true, message: message });
 });
 
-// Получение сообщений
 app.get('/api/messages/:userId', async (req, res) => {
     const { userId } = req.params;
     const lastId = parseInt(req.query.last_id) || 0;
@@ -545,7 +518,6 @@ app.get('/api/messages/:userId', async (req, res) => {
     } catch (error) { res.json({ messages: [] }); }
 });
 
-// Информация о пользователе
 app.get('/api/user/:userId', async (req, res) => {
     const { userId } = req.params;
     const keysData = await getAllKeys();
@@ -555,7 +527,6 @@ app.get('/api/user/:userId', async (req, res) => {
     res.status(404).json({ error: 'Пользователь не найден' });
 });
 
-// Информация о диалоге
 app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     const { userId, chatId } = req.params;
     const dialog = await getDialog(userId, chatId);
@@ -577,7 +548,6 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     });
 });
 
-// Удаление диалога
 app.delete('/api/delete_dialog', async (req, res) => {
     const { user1, user2 } = req.body;
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
@@ -586,7 +556,6 @@ app.delete('/api/delete_dialog', async (req, res) => {
     else res.status(404).json({ error: 'Диалог не найден' });
 });
 
-// Проверка истечения диалога
 app.post('/api/check_dialog_expiry', async (req, res) => {
     const { user1, user2 } = req.body;
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
@@ -594,7 +563,6 @@ app.post('/api/check_dialog_expiry', async (req, res) => {
     res.json(result);
 });
 
-// Уведомления для клиента
 app.get('/api/notifications/:userId', async (req, res) => {
     const { userId } = req.params;
     const lastId = parseInt(req.query.last_id) || 0;
@@ -602,7 +570,6 @@ app.get('/api/notifications/:userId', async (req, res) => {
     res.json({ notifications: notifications });
 });
 
-// Статус сервера
 app.get('/health', async (req, res) => {
     const keysData = await getAllKeys();
     const activatedCount = Object.values(keysData.keys).filter(k => k.activated).length;
@@ -621,7 +588,6 @@ app.get('/health', async (req, res) => {
     });
 });
 
-// Главная страница
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
 
 // ============ ЗАПУСК ============
