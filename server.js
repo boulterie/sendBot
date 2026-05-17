@@ -233,14 +233,32 @@ async function deleteDialog(user1, user2) {
     }
 }
 
-// Проверка существования диалога (новый эндпоинт)
+// Создание нового пустого диалога
+async function createEmptyDialog(user1, user2) {
+    const dialogId = [user1, user2].sort().join('_');
+    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
+
+    try {
+        await fs.access(dialogFile);
+        return { success: true, exists: true, created: false };
+    } catch {
+        const newDialog = {
+            created_at: getMoscowTime(),
+            messages: []
+        };
+        await fs.writeFile(dialogFile, JSON.stringify(newDialog, null, 2));
+        console.log(`📁 Создан новый диалог: ${dialogId}`);
+        return { success: true, exists: false, created: true };
+    }
+}
+
+// Проверка существования диалога
 async function dialogExists(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
 
     try {
         await fs.access(dialogFile);
-        // Файл существует, проверяем не истёк ли
         const data = await fs.readFile(dialogFile, 'utf-8');
         const dialog = JSON.parse(data);
         const settings = await getSettings();
@@ -292,7 +310,7 @@ async function cleanupOldDialogs() {
             } catch (err) { console.error(`Ошибка обработки ${file}:`, err); }
         }
         if (deletedCount > 0) console.log(`✅ Очистка завершена. Удалено диалогов: ${deletedCount}`);
-    } catch (error) { console.error('Ошибка очистки диалогов:', error); }
+    } catch (error) { console.error('Ошибка очистки диалогов:', error);
 }
 
 // ============ ФУНКЦИИ РАБОТЫ С УВЕДОМЛЕНИЯМИ ============
@@ -454,7 +472,19 @@ app.post('/api/find_user', async (req, res) => {
     else res.json({ success: false, error: 'Пользователь не найден' });
 });
 
-// Проверка существования диалога (новый эндпоинт)
+// Создание нового диалога
+app.post('/api/create_dialog', async (req, res) => {
+    const { user1, user2 } = req.body;
+
+    if (!user1 || !user2) {
+        return res.status(400).json({ error: 'Недостаточно данных' });
+    }
+
+    const result = await createEmptyDialog(user1, user2);
+    res.json(result);
+});
+
+// Проверка существования диалога
 app.get('/api/dialog_exists/:userId/:chatId', async (req, res) => {
     const { userId, chatId } = req.params;
     const result = await dialogExists(userId, chatId);
