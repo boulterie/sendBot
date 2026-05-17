@@ -25,7 +25,6 @@ const DATA_DIR = path.join(__dirname, 'data');
 const KEYS_FILE = path.join(DATA_DIR, 'keys.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const DIALOGS_DIR = path.join(DATA_DIR, 'dialogs');
-const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
@@ -49,7 +48,6 @@ async function initDataStorage() {
     try {
         await fs.mkdir(DATA_DIR, { recursive: true });
         await fs.mkdir(DIALOGS_DIR, { recursive: true });
-        await fs.mkdir(IMAGES_DIR, { recursive: true });
 
         try { await fs.access(KEYS_FILE); } catch { await fs.writeFile(KEYS_FILE, JSON.stringify({ keys: {} }, null, 2)); }
         try { await fs.access(USERS_FILE); } catch { await fs.writeFile(USERS_FILE, JSON.stringify({ users: {} }, null, 2)); }
@@ -58,7 +56,6 @@ async function initDataStorage() {
 
         const dialogFiles = await fs.readdir(DIALOGS_DIR);
         console.log(`✅ Инициализация завершена. Диалогов: ${dialogFiles.length}`);
-        console.log(`✅ Папка изображений: ${IMAGES_DIR}`);
     } catch (error) {
         console.error('❌ Ошибка инициализации:', error);
     }
@@ -224,74 +221,12 @@ async function saveDialog(user1, user2, dialog) {
     await fs.writeFile(dialogFile, JSON.stringify(dialog, null, 2));
 }
 
-// Сохранение изображения (только файл, без дублирования в JSON)
-async function saveImage(imageData, messageId) {
-    const imagePath = path.join(IMAGES_DIR, `${messageId}.jpg`);
-    const buffer = Buffer.from(imageData, 'base64');
-    await fs.writeFile(imagePath, buffer);
-    return `/api/images/${messageId}.jpg`;
-}
-
-// Удаление диалога вместе со всеми изображениями
-async function deleteDialogWithImages(user1, user2) {
-    const dialogId = [user1, user2].sort().join('_');
-    const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
-
-    try {
-        const data = await fs.readFile(dialogFile, 'utf-8');
-        const dialog = JSON.parse(data);
-
-        // Удаляем все изображения, связанные с диалогом
-        for (const message of dialog.messages) {
-            if (message.is_image && message.image_url) {
-                const imageName = message.image_url.split('/').pop();
-                const imagePath = path.join(IMAGES_DIR, imageName);
-                try {
-                    await fs.unlink(imagePath);
-                    console.log(`🗑️ Удалено изображение: ${imageName}`);
-                } catch (err) {
-                    // Игнорируем ошибки удаления картинок
-                }
-            }
-        }
-
-        // Удаляем файл диалога
-        await fs.unlink(dialogFile);
-        console.log(`🗑️ Удалён диалог: ${dialogId} и связанные изображения`);
-        return { success: true };
-    } catch {
-        return { success: false };
-    }
-}
-
-// Простое удаление диалога (без картинок, для совместимости)
+// Удаление диалога
 async function deleteDialog(user1, user2) {
     const dialogId = [user1, user2].sort().join('_');
     const dialogFile = path.join(DIALOGS_DIR, `${dialogId}.json`);
     try {
         await fs.unlink(dialogFile);
-        return { success: true };
-    } catch {
-        return { success: false };
-    }
-}
-
-// Удаление диалога по пути файла с картинками (для фоновой очистки)
-async function deleteDialogWithImagesByFile(dialogPath, dialog) {
-    try {
-        // Удаляем картинки
-        for (const message of dialog.messages) {
-            if (message.is_image && message.image_url) {
-                const imageName = message.image_url.split('/').pop();
-                const imagePath = path.join(IMAGES_DIR, imageName);
-                try {
-                    await fs.unlink(imagePath);
-                } catch (err) {
-                    // Игнорируем
-                }
-            }
-        }
-        await fs.unlink(dialogPath);
         return { success: true };
     } catch {
         return { success: false };
@@ -306,7 +241,7 @@ async function checkAndDeleteExpiredDialog(user1, user2) {
     const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
 
     if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
-        await deleteDialogWithImages(user1, user2);
+        await deleteDialog(user1, user2);
         return { expired: true, deleted: true };
     }
     return { expired: false };
@@ -327,7 +262,7 @@ async function cleanupOldDialogs() {
                 const data = await fs.readFile(dialogPath, 'utf-8');
                 const dialog = JSON.parse(data);
                 if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
-                    await deleteDialogWithImagesByFile(dialogPath, dialog);
+                    await fs.unlink(dialogPath);
                     deletedCount++;
                     console.log(`🗑️ Удалён устаревший диалог: ${file}`);
                 }
@@ -496,19 +431,13 @@ app.post('/api/find_user', async (req, res) => {
     else res.json({ success: false, error: 'Пользователь не найден' });
 });
 
-// Отправка сообщения (без дублирования image_data в JSON)
+// Отправка сообщения (с сохранением image_data в JSON)
 app.post('/api/send', async (req, res) => {
     const { from, to, text, is_image, image_data } = req.body;
 
     if (!from || !to) return res.status(400).json({ error: 'Недостаточно данных' });
 
     const messageId = Date.now();
-    let imageUrl = null;
-
-    // Сохраняем изображение только как файл, не дублируем в JSON
-    if (is_image && image_data) {
-        imageUrl = await saveImage(image_data, messageId);
-    }
 
     const message = {
         id: messageId,
@@ -516,17 +445,17 @@ app.post('/api/send', async (req, res) => {
         to: to,
         text: text || (is_image ? '[Изображение]' : ''),
         is_image: is_image || false,
-        image_url: imageUrl,
+        image_data: is_image ? image_data : null,
         timestamp: Math.floor(getMoscowTime() / 1000)
     };
 
-    // Сохраняем диалог для получателя
+    // Сохраняем для получателя
     const dialogTo = await getDialog(from, to);
     dialogTo.messages.push(message);
     if (dialogTo.messages.length > 100) dialogTo.messages = dialogTo.messages.slice(-100);
     await saveDialog(from, to, dialogTo);
 
-    // Сохраняем диалог для отправителя
+    // Сохраняем для отправителя
     const dialogFrom = await getDialog(to, from);
     dialogFrom.messages.push(message);
     if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
@@ -534,18 +463,6 @@ app.post('/api/send', async (req, res) => {
 
     console.log(`📨 ${from} -> ${to}: ${is_image ? '[Изображение]' : text.substring(0, 50)}`);
     res.json({ success: true, message: message });
-});
-
-// Получение изображения
-app.get('/api/images/:imageId', async (req, res) => {
-    const { imageId } = req.params;
-    const imagePath = path.join(IMAGES_DIR, imageId);
-    try {
-        await fs.access(imagePath);
-        res.sendFile(imagePath);
-    } catch {
-        res.status(404).json({ error: 'Изображение не найдено' });
-    }
 });
 
 // Получение сообщений
@@ -580,7 +497,7 @@ app.get('/api/user/:userId', async (req, res) => {
     res.status(404).json({ error: 'Пользователь не найден' });
 });
 
-// Информация о диалоге (с московским временем)
+// Информация о диалоге
 app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     const { userId, chatId } = req.params;
     const dialog = await getDialog(userId, chatId);
@@ -601,11 +518,11 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     });
 });
 
-// Удаление диалога (с картинками)
+// Удаление диалога
 app.delete('/api/delete_dialog', async (req, res) => {
     const { user1, user2 } = req.body;
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
-    const result = await deleteDialogWithImages(user1, user2);
+    const result = await deleteDialog(user1, user2);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: 'Диалог не найден' });
 });
@@ -659,7 +576,6 @@ async function start() {
         console.log(`${'='.repeat(50)}`);
         console.log(`📡 Порт: ${PORT}`);
         console.log(`📁 Данные: ${DATA_DIR}`);
-        console.log(`🖼️ Изображения: ${IMAGES_DIR}`);
         console.log(`🔐 Админ панель: https://msgsendlerpro.bothost.tech/`);
         console.log(`📊 Health: https://msgsendlerpro.bothost.tech/health`);
         console.log(`🕐 Часовой пояс: MSK (UTC+3)`);
