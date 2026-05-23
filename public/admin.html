@@ -24,7 +24,6 @@
             padding: 20px;
         }
 
-        /* Форма входа */
         .login-container {
             display: flex;
             justify-content: center;
@@ -86,12 +85,10 @@
             box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
         }
 
-        /* Основная админка */
         .admin-container {
             display: none;
         }
 
-        /* Шапка */
         .header {
             background: rgba(30, 30, 35, 0.95);
             border-radius: 20px;
@@ -114,8 +111,28 @@
             font-size: 14px;
         }
 
-        .logout-btn {
+        .header-actions {
+            display: flex;
+            gap: 10px;
             float: right;
+        }
+
+        .refresh-btn {
+            background: rgba(76, 175, 80, 0.8);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(76, 175, 80, 1);
+        }
+
+        .logout-btn {
             background: rgba(220, 53, 69, 0.8);
             color: white;
             border: none;
@@ -130,7 +147,6 @@
             background: rgba(220, 53, 69, 1);
         }
 
-        /* Статистика */
         .stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -168,7 +184,6 @@
             font-size: 14px;
         }
 
-        /* Панели */
         .panel {
             background: rgba(30, 30, 35, 0.95);
             border-radius: 20px;
@@ -186,7 +201,6 @@
             color: #4CAF50;
         }
 
-        /* Формы */
         .form-group {
             margin-bottom: 15px;
         }
@@ -225,7 +239,6 @@
             flex: 1;
         }
 
-        /* Чекбокс */
         .checkbox-group {
             display: flex;
             align-items: center;
@@ -243,7 +256,6 @@
             cursor: pointer;
         }
 
-        /* Таблица */
         .table-container {
             overflow-x: auto;
             border-radius: 12px;
@@ -292,11 +304,6 @@
         td {
             font-family: 'Courier New', monospace;
             font-size: 13px;
-        }
-
-        td:first-child {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
         }
 
         tr:hover {
@@ -445,6 +452,7 @@
             margin-bottom: 20px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             padding-bottom: 10px;
+            flex-wrap: wrap;
         }
 
         .tab {
@@ -512,20 +520,6 @@
 
         .toggle-switch.active::after {
             left: 26px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #f3f3f3;
-            border-top: 2px solid #4CAF50;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
         }
 
         .modal {
@@ -611,6 +605,49 @@
         .lifetime-input-group select {
             width: auto;
         }
+
+        /* Стили для таблицы сессий */
+        .sessions-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .sessions-stat-card {
+            background: rgba(20, 20, 25, 0.8);
+            border-radius: 12px;
+            padding: 15px 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sessions-stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .sessions-stat-label {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .session-valid {
+            color: #4CAF50;
+        }
+
+        .session-invalid {
+            color: #ff6b6b;
+        }
+
+        .session-id-cell {
+            font-family: monospace;
+            font-size: 11px;
+            background: rgba(0,0,0,0.3);
+            padding: 4px 6px;
+            border-radius: 4px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -629,7 +666,10 @@
         <!-- Основная админка -->
         <div id="adminContainer" class="admin-container">
             <div class="header">
-                <button class="logout-btn" onclick="logout()">Выйти</button>
+                <div class="header-actions">
+                    <button class="refresh-btn" onclick="refreshCurrentTab()">🔄 Обновить</button>
+                    <button class="logout-btn" onclick="logout()">Выйти</button>
+                </div>
                 <h1>📡 Админ панель мессенджера</h1>
                 <p>Управление ключами, пользователями и настройками</p>
                 <div id="serverStatus" style="margin-top: 10px; font-size: 12px; color: #888;"></div>
@@ -653,9 +693,10 @@
 
             <!-- Вкладки -->
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('keys')">🔑 Ключи</div>
-                <div class="tab" onclick="switchTab('notifications')">📢 Уведомления</div>
-                <div class="tab" onclick="switchTab('settings')">⚙️ Настройки</div>
+                <div class="tab active" data-tab="keys">🔑 Ключи</div>
+                <div class="tab" data-tab="notifications">📢 Уведомления</div>
+                <div class="tab" data-tab="sessions">🔐 Сессии</div>
+                <div class="tab" data-tab="settings">⚙️ Настройки</div>
             </div>
 
             <!-- Вкладка Ключи -->
@@ -664,7 +705,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Количество дней</label>
-                        <input type="number" id="keyDays" placeholder="Дней (1-365)" min="1" max="365" value="30">
+                        <input type="number" id="keyDays" placeholder="Дней (от 1)" min="1" value="30">
                     </div>
                     <div class="form-group checkbox-group" style="justify-content: center;">
                         <input type="checkbox" id="hwidCheck" checked>
@@ -687,7 +728,7 @@
                     <table id="keysTable">
                         <thead>
                             <tr>
-                                <th class="sortable" onclick="sortKeys('key')" style="min-width: 200px;">🔑 Ключ</th>
+                                <th class="sortable" onclick="sortKeys('key')">🔑 Ключ</th>
                                 <th class="sortable" onclick="sortKeys('created_at')">📅 Создан</th>
                                 <th class="sortable" onclick="sortKeys('days_valid')">⏱️ Дней</th>
                                 <th class="sortable" onclick="sortKeys('status')">📊 Статус</th>
@@ -723,6 +764,31 @@
 
                 <h2 style="margin-top: 30px;">📋 История уведомлений</h2>
                 <div id="notificationsList"></div>
+            </div>
+
+            <!-- Вкладка Сессии -->
+            <div id="tabSessions" class="panel" style="display: none;">
+                <h2>🔐 Активные сессии</h2>
+                <div id="sessionsStats" class="sessions-stats"></div>
+                <div class="table-container">
+                    <table id="sessionsTable">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Имя пользователя</th>
+                                <th>Ключ активации</th>
+                                <th>Session ID</th>
+                                <th>Статус</th>
+                                <th>Создана</th>
+                                <th>Живет минут</th>
+                                <th>Истекает через</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionsTableBody">
+                            <tr><td colspan="8" style="text-align: center;">Загрузка...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Вкладка Настройки -->
@@ -764,7 +830,7 @@
             </div>
             <div class="form-group">
                 <label>Количество дней</label>
-                <input type="number" id="editDays" min="1" max="365">
+                <input type="number" id="editDays" min="1">
             </div>
             <div class="form-group checkbox-group">
                 <input type="checkbox" id="editHwidCheck">
@@ -793,21 +859,19 @@
         let currentSort = { field: 'key', order: 'asc' };
         let currentSearch = '';
         let editUsers = [];
+        let currentTab = 'keys';
 
-        // Форматирование даты (только дата, без времени)
         function formatDateOnly(timestamp) {
             if (!timestamp) return '—';
             const date = new Date(timestamp);
             return date.toLocaleDateString('ru-RU');
         }
 
-        // Форматирование полной даты для всплывающей подсказки
         function formatFullDate(timestamp) {
             if (!timestamp) return '—';
             return new Date(timestamp).toLocaleString('ru-RU');
         }
 
-        // Форматирование оставшегося времени
         function getDaysLeft(expiresAt) {
             if (!expiresAt) return '—';
             const now = Date.now();
@@ -817,28 +881,96 @@
             return `${days} дн.`;
         }
 
+        // Обновить текущую вкладку
+        function refreshCurrentTab() {
+            if (currentTab === 'keys') {
+                loadKeys();
+                loadStats();
+            } else if (currentTab === 'notifications') {
+                loadNotifications();
+            } else if (currentTab === 'sessions') {
+                loadSessions();
+            } else if (currentTab === 'settings') {
+                loadSettings();
+            }
+        }
+
         // Переключение вкладок
         function switchTab(tab) {
+            currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById('tabKeys').style.display = 'none';
             document.getElementById('tabNotifications').style.display = 'none';
+            document.getElementById('tabSessions').style.display = 'none';
             document.getElementById('tabSettings').style.display = 'none';
 
             if (tab === 'keys') {
-                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.querySelector('.tab[data-tab="keys"]').classList.add('active');
                 document.getElementById('tabKeys').style.display = 'block';
             } else if (tab === 'notifications') {
-                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.querySelector('.tab[data-tab="notifications"]').classList.add('active');
                 document.getElementById('tabNotifications').style.display = 'block';
                 loadNotifications();
+            } else if (tab === 'sessions') {
+                document.querySelector('.tab[data-tab="sessions"]').classList.add('active');
+                document.getElementById('tabSessions').style.display = 'block';
+                loadSessions();
             } else if (tab === 'settings') {
-                document.querySelectorAll('.tab')[2].classList.add('active');
+                document.querySelector('.tab[data-tab="settings"]').classList.add('active');
                 document.getElementById('tabSettings').style.display = 'block';
                 loadSettings();
             }
         }
 
-        // Админ-логин
+        // Загрузка сессий
+        async function loadSessions() {
+            const tbody = document.getElementById('sessionsTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Загрузка...</td></tr>';
+
+            try {
+                const response = await fetch('/sessions');
+                const html = await response.text();
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                const statsDiv = doc.querySelector('.stats');
+                const statsHtml = statsDiv ? statsDiv.innerHTML : '';
+                document.getElementById('sessionsStats').innerHTML = statsHtml;
+
+                const rows = doc.querySelectorAll('table tbody tr');
+
+                if (rows.length === 0 || (rows.length === 1 && rows[0].innerText.includes('Нет активных сессий'))) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Нет активных сессий</td>' + '</tr>';
+                    return;
+                }
+
+                let sessionsHtml = '';
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 8) {
+                        const isValid = cells[4]?.innerText.includes('Валидна');
+                        sessionsHtml += `
+                            <tr>
+                                <td>${cells[0]?.innerHTML || '—'}</td>
+                                <td>${cells[1]?.innerHTML || '—'}</td>
+                                <td>${cells[2]?.innerHTML || '—'}</td>
+                                <td>${cells[3]?.innerHTML || '—'}</td>
+                                <td class="${isValid ? 'session-valid' : 'session-invalid'}">${cells[4]?.innerHTML || '—'}</td>
+                                <td>${cells[5]?.innerHTML || '—'}</td>
+                                <td>${cells[6]?.innerHTML || '—'}</td>
+                                <td>${cells[7]?.innerHTML || '—'}</td>
+                            </tr>
+                        `;
+                    }
+                }
+                tbody.innerHTML = sessionsHtml;
+            } catch (error) {
+                console.error('Ошибка загрузки сессий:', error);
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Ошибка загрузки сессий</td>' + '<tr>';
+            }
+        }
+
         async function adminLogin() {
             const password = document.getElementById('adminPassword').value;
             if (!password) {
@@ -907,7 +1039,6 @@
         function renderKeys() {
             let keysArray = Object.entries(allKeys).map(([key, data]) => ({ key, ...data }));
 
-            // Фильтрация
             if (currentSearch) {
                 const searchLower = currentSearch.toLowerCase();
                 keysArray = keysArray.filter(k => {
@@ -922,7 +1053,6 @@
                 });
             }
 
-            // Сортировка
             keysArray.sort((a, b) => {
                 let aVal, bVal;
                 if (currentSort.field === 'key') {
@@ -935,7 +1065,6 @@
                     aVal = a.days_valid || 0;
                     bVal = b.days_valid || 0;
                 } else if (currentSort.field === 'status') {
-                    // Сортируем по статусу: активен (1) > не активирован (2) > истёк (3)
                     const getStatusValue = (keyData) => {
                         if (keyData.activated && keyData.expires_at > Date.now()) return 1;
                         if (!keyData.activated) return 2;
@@ -960,11 +1089,9 @@
             tbody.innerHTML = '';
 
             for (const keyData of keysArray) {
-                const row = tbody.insertRow();
                 const isActive = keyData.activated && keyData.expires_at > Date.now();
                 const isExpired = keyData.activated && keyData.expires_at <= Date.now();
 
-                // Форматируем списки пользователей с разделением пустой строкой
                 const usernames = keyData.users && keyData.users.length > 0
                     ? keyData.users.map(u => u.username || '—').join('\n\n')
                     : '—';
@@ -975,6 +1102,7 @@
                     ? keyData.users.map(u => u.hwid ? u.hwid : '—').join('\n\n')
                     : '—';
 
+                const row = tbody.insertRow();
                 row.innerHTML = `
                     <td><span class="key-code">${keyData.key}</span></td>
                     <td title="${formatFullDate(keyData.created_at)}">${formatDateOnly(keyData.created_at)}</td>
@@ -1001,7 +1129,7 @@
             }
 
             if (keysArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11">Ключи не найдены</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11">Ключи не найдены</td>' + '</tr>';
             }
         }
 
@@ -1030,8 +1158,8 @@
             const days = document.getElementById('keyDays').value;
             const hwidCheck = document.getElementById('hwidCheck').checked;
 
-            if (!days || days < 1 || days > 365) {
-                document.getElementById('generateResult').innerHTML = '<span class="error">Введите количество дней (1-365)</span>';
+            if (!days || days < 1) {
+                document.getElementById('generateResult').innerHTML = '<span class="error">Введите количество дней (минимум 1)</span>';
                 return;
             }
 
@@ -1044,7 +1172,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById('generateResult').innerHTML = `<span class="success">✅ Ключ создан: <span class="key-code">${data.key}</span> (${data.days} дней, HWID проверка: ${data.hwid_check ? 'вкл' : 'выкл'})</span>`;
+                    document.getElementById('generateResult').innerHTML = `<span class="success">✅ Ключ создан: <span class="key-code">${data.key}</span> (${data.days} дней)</span>`;
                     loadKeys();
                     loadStats();
                     setTimeout(() => {
@@ -1401,6 +1529,11 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        // Назначение обработчиков вкладок
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
     </script>
 </body>
 </html>

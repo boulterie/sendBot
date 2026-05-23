@@ -31,8 +31,8 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 // ============ СЕССИИ ============
-const activeSessions = new Map(); // session_id -> { user_id, expires_at, created_at }
-const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // Очистка каждый час
+const activeSessions = new Map();
+const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000;
 
 function getMoscowTime() {
     return Date.now() + MOSCOW_OFFSET;
@@ -110,15 +110,15 @@ async function createKey(daysValid, hwidCheckEnabled = true) {
         created_at: now,
         days_valid: daysValid,
         activated: false,
-        activations_left: 2,  // Два слота для активации
+        activations_left: 2,
         activated_at: null,
         expires_at: null,
-        users: [],  // Массив пользователей
+        users: [],
         hwid_check_enabled: hwidCheckEnabled
     };
 
     await saveKeys(keysData);
-    console.log(`🎫 Создан ключ: ${key} (${daysValid} дней, HWID проверка: ${hwidCheckEnabled ? 'вкл' : 'выкл'}, 2 слота)`);
+    console.log(`🎫 Создан ключ: ${key} (${daysValid} дней)`);
     return key;
 }
 
@@ -157,18 +157,15 @@ async function activateKey(key, username, hwid = null) {
 
     const keyData = keysData.keys[key];
 
-    // Проверяем, есть ли свободные слоты
     if (keyData.activations_left <= 0) {
         return { success: false, error: 'Ключ уже использован максимальное количество раз (2)' };
     }
 
-    // Проверяем, не активирован ли уже этот пользователь
     const existingUser = keyData.users.find(u => u.username === username);
     if (existingUser) {
         return { success: false, error: 'Это имя уже используется с данным ключом' };
     }
 
-    // Генерируем уникальный ID
     let userId;
     let isUnique = false;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -190,7 +187,6 @@ async function activateKey(key, username, hwid = null) {
     const now = getMoscowTime();
     const expiresAt = keyData.expires_at || (now + (keyData.days_valid * 24 * 60 * 60 * 1000));
 
-    // Добавляем пользователя
     keyData.users.push({
         username: username,
         user_id: userId,
@@ -204,8 +200,7 @@ async function activateKey(key, username, hwid = null) {
     keyData.expires_at = expiresAt;
 
     await saveKeys(keysData);
-    console.log(`✅ Активирован слот ключа: ${key} -> ${username} (${userId}), осталось слотов: ${keyData.activations_left}`);
-
+    console.log(`✅ Активирован ключ: ${key} -> ${username} (${userId})`);
     return { success: true, userId: userId, expiresAt: expiresAt };
 }
 
@@ -214,8 +209,6 @@ async function checkKey(key, username, hwid = null) {
     if (!keysData.keys[key]) return { success: false, error: 'Ключ не найден' };
 
     const keyData = keysData.keys[key];
-
-    // Ищем пользователя в массиве
     const userData = keyData.users.find(u => u.username === username);
 
     if (!userData) {
@@ -276,11 +269,10 @@ function cleanupExpiredSessions() {
         }
     }
     if (deletedCount > 0) {
-        console.log(`🧹 Очищено устаревших сессий: ${deletedCount}`);
+        console.log(`🧹 Очищено сессий: ${deletedCount}`);
     }
 }
 
-// Запускаем очистку сессий каждый час
 setInterval(cleanupExpiredSessions, SESSION_CLEANUP_INTERVAL);
 
 async function createSession(userId, activationKey) {
@@ -302,38 +294,14 @@ async function createSession(userId, activationKey) {
     };
 }
 
-async function validateSession(sessionId, userId) {
-    if (!sessionId) return { valid: false, error: 'Missing session_id' };
-
-    const session = activeSessions.get(sessionId);
-    if (!session) {
-        return { valid: false, error: 'Invalid session', need_refresh: true };
-    }
-
-    if (session.user_id !== userId) {
-        return { valid: false, error: 'User mismatch' };
-    }
-
-    const currentHour = getCurrentServerHour();
-    if (session.expires_at_hour !== currentHour) {
-        activeSessions.delete(sessionId);
-        return { valid: false, error: 'Session expired', need_refresh: true };
-    }
-
-    return { valid: true, session: session };
-}
-
 async function refreshSession(oldSessionId, userId, activationKey) {
-    // Проверяем старую сессию
     const oldSession = activeSessions.get(oldSessionId);
     if (!oldSession || oldSession.user_id !== userId) {
         return { success: false, error: 'Invalid old session' };
     }
 
-    // Удаляем старую сессию
     activeSessions.delete(oldSessionId);
 
-    // Создаем новую
     const currentHour = getCurrentServerHour();
     const newSessionId = generateSessionId();
 
@@ -353,7 +321,6 @@ async function refreshSession(oldSessionId, userId, activationKey) {
     };
 }
 
-// Middleware для проверки сессии
 function verifySessionMiddleware(req, res, next) {
     const { session_id, from } = req.body;
 
@@ -422,7 +389,6 @@ async function createEmptyDialog(user1, user2) {
             messages: []
         };
         await fs.writeFile(dialogFile, JSON.stringify(newDialog, null, 2));
-        console.log(`📁 Создан новый диалог: ${dialogId}`);
         return { success: true, exists: false, created: true };
     }
 }
@@ -460,7 +426,7 @@ async function checkAndDeleteExpiredDialog(user1, user2) {
 
 async function cleanupOldDialogs() {
     const settings = await getSettings();
-    if (!settings.auto_cleanup_enabled) { console.log('⚠️ Автоочистка диалогов отключена'); return; }
+    if (!settings.auto_cleanup_enabled) return;
     const lifetimeMs = settings.dialog_lifetime_days * 24 * 60 * 60 * 1000;
     try {
         const dialogFiles = await fs.readdir(DIALOGS_DIR);
@@ -474,11 +440,10 @@ async function cleanupOldDialogs() {
                 if (dialog.created_at && (now - dialog.created_at) > lifetimeMs) {
                     await fs.unlink(dialogPath);
                     deletedCount++;
-                    console.log(`🗑️ Удалён устаревший диалог: ${file}`);
                 }
             } catch (err) { console.error(`Ошибка обработки ${file}:`, err); }
         }
-        if (deletedCount > 0) console.log(`✅ Очистка завершена. Удалено диалогов: ${deletedCount}`);
+        if (deletedCount > 0) console.log(`🗑️ Удалено диалогов: ${deletedCount}`);
     } catch (error) { console.error('Ошибка очистки диалогов:', error); }
 }
 
@@ -508,7 +473,7 @@ async function addNotification(title, message, sender = 'admin') {
     notificationsData.notifications.unshift(notification);
     if (notificationsData.notifications.length > 200) notificationsData.notifications = notificationsData.notifications.slice(0, 200);
     await saveNotifications(notificationsData);
-    console.log(`📢 Добавлено уведомление: ${title}`);
+    console.log(`📢 Уведомление: ${title}`);
     return notification;
 }
 
@@ -518,7 +483,6 @@ async function deleteNotification(notificationId) {
     notificationsData.notifications = notificationsData.notifications.filter(n => n.id !== notificationId);
     if (notificationsData.notifications.length === initialLength) return { success: false, error: 'Уведомление не найдено' };
     await saveNotifications(notificationsData);
-    console.log(`🗑️ Удалено уведомление: ${notificationId}`);
     return { success: true };
 }
 
@@ -544,7 +508,7 @@ app.post('/api/admin/generate_key', async (req, res) => {
     const { days, hwid_check } = req.body;
     const daysNum = parseInt(days);
     const hwidCheckEnabled = hwid_check !== false;
-    if (isNaN(daysNum) || daysNum < 1 || daysNum > 365) return res.status(400).json({ error: 'Некорректное количество дней' });
+    if (isNaN(daysNum) || daysNum < 1) return res.status(400).json({ error: 'Некорректное количество дней' });
     const key = await createKey(daysNum, hwidCheckEnabled);
     res.json({ success: true, key: key, days: daysNum, hwid_check: hwidCheckEnabled });
 });
@@ -630,14 +594,12 @@ app.put('/api/admin/update_key_full/:key', async (req, res) => {
 
     const keyData = keysData.keys[key];
 
-    // Обновляем параметры
     if (days_valid !== undefined) keyData.days_valid = days_valid;
     if (hwid_check_enabled !== undefined) keyData.hwid_check_enabled = hwid_check_enabled;
     if (activated !== undefined) keyData.activated = activated;
     if (activations_left !== undefined) keyData.activations_left = activations_left;
     if (users !== undefined) keyData.users = users;
 
-    // Пересчитываем дату истечения если нужно
     if (keyData.users && keyData.users.length > 0 && !keyData.expires_at) {
         const now = getMoscowTime();
         keyData.expires_at = now + (keyData.days_valid * 24 * 60 * 60 * 1000);
@@ -657,9 +619,7 @@ app.post('/api/register', async (req, res) => {
 
     const result = await checkKey(key, username, hwid);
     if (result.success) {
-        // СОЗДАЕМ СЕССИЮ - ЭТО БЫЛО ПРОПУЩЕНО!
         const sessionData = await createSession(result.userId, key);
-
         res.json({
             success: true,
             userId: result.userId,
@@ -683,7 +643,6 @@ app.post('/api/activate', async (req, res) => {
     const result = await activateKey(key, username, hwid);
     if (result.success) {
         const sessionData = await createSession(result.userId, key);
-
         res.json({
             success: true,
             userId: result.userId,
@@ -718,9 +677,7 @@ app.post('/api/find_user', async (req, res) => {
 app.post('/api/create_dialog', verifySessionMiddleware, async (req, res) => {
     const { user2 } = req.body;
     const user1 = req.session.user_id;
-
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
-
     const result = await createEmptyDialog(user1, user2);
     res.json(result);
 });
@@ -756,7 +713,6 @@ app.post('/api/send', verifySessionMiddleware, async (req, res) => {
     if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
     await saveDialog(to, from, dialogFrom);
 
-    console.log(`📨 ${from} -> ${to}: ${is_image ? '[Изображение]' : text.substring(0, 50)}`);
     res.json({ success: true, message: message });
 });
 
@@ -818,9 +774,7 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
 app.delete('/api/delete_dialog', verifySessionMiddleware, async (req, res) => {
     const { user2 } = req.body;
     const user1 = req.session.user_id;
-
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
-
     const result = await deleteDialog(user1, user2);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: 'Диалог не найден' });
@@ -905,7 +859,6 @@ app.post('/api/refresh_session', async (req, res) => {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Сначала проверяем, что ключ все еще активен
     const checkResult = await checkKey(activation_key, null, null);
     if (!checkResult.success) {
         return res.status(401).json({ error: 'Activation key expired or invalid', need_full_reconnect: true });
@@ -926,19 +879,14 @@ app.post('/api/refresh_session', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
-
-// ============ СТРАНИЦА ДЛЯ ПРОСМОТРА СЕССИЙ ============
-app.get('/sessions', async (req, res) => {
+// ============ ЭНДПОИНТ ДЛЯ ПОЛУЧЕНИЯ ДАННЫХ СЕССИЙ (JSON) ============
+app.get('/api/admin/sessions_data', async (req, res) => {
     const sessions = [];
     const currentHour = getCurrentServerHour();
     const now = getMoscowTime();
-
-    // Собираем данные о пользователях из ключей
     const keysData = await getAllKeys();
 
     for (const [sessionId, session] of activeSessions) {
-        // Ищем имя пользователя по user_id
         let username = null;
         let activationKeyFull = null;
 
@@ -958,13 +906,9 @@ app.get('/sessions', async (req, res) => {
             session_id_short: sessionId.substring(0, 16) + '...',
             user_id: session.user_id,
             username: username || 'Unknown',
-            activation_key: session.activation_key || activationKeyFull,
             activation_key_short: (session.activation_key || activationKeyFull || '').substring(0, 16) + '...',
-            expires_at_hour: session.expires_at_hour,
             is_valid: session.expires_at_hour === currentHour,
             created_at: new Date(session.created_at).toLocaleString('ru-RU'),
-            created_at_timestamp: session.created_at,
-            time_left_hours: (session.expires_at_hour - currentHour),
             created_ago_minutes: Math.floor((now - session.created_at) / 60000),
             will_expire_in_minutes: session.expires_at_hour === currentHour
                 ? Math.floor(((session.expires_at_hour + 1) * 60 * 60 * 1000 - now) / 60000)
@@ -972,184 +916,18 @@ app.get('/sessions', async (req, res) => {
         });
     }
 
-    // Сортируем по времени создания (новые сверху)
     sessions.sort((a, b) => b.created_at_timestamp - a.created_at_timestamp);
 
-    const html = `
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Активные сессии - Мессенджер</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f0f12 0%, #1a1a1f 100%);
-            min-height: 100vh;
-            color: #e0e0e0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        h1 {
-            margin-bottom: 10px;
-            background: linear-gradient(135deg, #fff, #4CAF50);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .subtitle {
-            color: #888;
-            margin-bottom: 30px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .stats {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: rgba(30,30,35,0.95);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .stat-number {
-            font-size: 36px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
-        .stat-label {
-            color: #888;
-            font-size: 14px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: rgba(30,30,35,0.95);
-            border-radius: 16px;
-            overflow: hidden;
-        }
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        th {
-            background: rgba(20,20,25,0.9);
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        tr:hover {
-            background: rgba(255,255,255,0.03);
-        }
-        .valid-true {
-            color: #4CAF50;
-        }
-        .valid-false {
-            color: #ff6b6b;
-        }
-        .session-id {
-            font-family: monospace;
-            font-size: 12px;
-            background: rgba(0,0,0,0.3);
-            padding: 4px 8px;
-            border-radius: 6px;
-        }
-        .refresh-btn {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        .refresh-btn:hover {
-            background: #2e7d32;
-        }
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            color: #666;
-            font-size: 12px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔐 Активные сессии</h1>
-        <div class="subtitle">Текущие сессии пользователей на сервере</div>
-
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number">${sessions.length}</div>
-                <div class="stat-label">Всего сессий</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${sessions.filter(s => s.is_valid).length}</div>
-                <div class="stat-label">Валидных</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${sessions.filter(s => !s.is_valid).length}</div>
-                <div class="stat-label">Истекших (будут удалены)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${currentHour}</div>
-                <div class="stat-label">Текущий час сервера</div>
-            </div>
-        </div>
-
-        <button class="refresh-btn" onclick="location.reload()">🔄 Обновить</button>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Имя пользователя</th>
-                    <th>Ключ активации</th>
-                    <th>Session ID</th>
-                    <th>Статус</th>
-                    <th>Создана</th>
-                    <th>Живет минут</th>
-                    <th>Истекает через</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${sessions.map(s => `
-                    <tr>
-                        <td><span class="session-id">${s.user_id}</span></td>
-                        <td>${s.username}</td>
-                        <td><span class="session-id">${s.activation_key_short}</span></td>
-                        <td><span class="session-id" title="${s.session_id_full}">${s.session_id_short}</span></td>
-                        <td class="${s.is_valid ? 'valid-true' : 'valid-false'}">${s.is_valid ? '✅ Валидна' : '❌ Истекла'}</td>
-                        <td>${s.created_at}</td>
-                        <td>${s.created_ago_minutes} мин.</td>
-                        <td>${s.is_valid ? (s.will_expire_in_minutes > 0 ? s.will_expire_in_minutes + ' мин.' : 'менее минуты') : 'истекла'}</td>
-                    </tr>
-                `).join('')}
-                ${sessions.length === 0 ? '<tr><td colspan="8" style="text-align: center; padding: 40px;">Нет активных сессий</td></tr>' : ''}
-            </tbody>
-        </table>
-        <div class="footer">
-            🔄 Сессии автоматически очищаются при смене часа | 🕐 Серверное время: ${new Date(getMoscowTime()).toLocaleString('ru-RU')}
-        </div>
-    </div>
-</body>
-</html>
-    `;
-    
-    res.send(html);
+    res.json({
+        total_sessions: sessions.length,
+        valid_sessions: sessions.filter(s => s.is_valid).length,
+        invalid_sessions: sessions.filter(s => !s.is_valid).length,
+        current_server_hour: currentHour,
+        sessions: sessions
+    });
 });
+
+app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
 
 // ============ ЗАПУСК ============
 async function start() {
@@ -1158,12 +936,10 @@ async function start() {
     cleanupOldDialogs();
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`\n${'='.repeat(50)}`);
-        console.log(`🚀 Сервер мессенджера запущен!`);
+        console.log(`🚀 Сервер запущен!`);
         console.log(`${'='.repeat(50)}`);
         console.log(`📡 Порт: ${PORT}`);
-        console.log(`📁 Данные: ${DATA_DIR}`);
         console.log(`🔐 Админ панель: https://msgsendlerpro.bothost.tech/`);
-        console.log(`📊 Health: https://msgsendlerpro.bothost.tech/health`);
         console.log(`🕐 Часовой пояс: MSK (UTC+3)`);
         console.log(`${'='.repeat(50)}\n`);
     });
