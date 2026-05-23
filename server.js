@@ -30,6 +30,10 @@ const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
+// ============ СЕССИИ ============
+const activeSessions = new Map(); // session_id -> { user_id, expires_at, created_at }
+const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // Очистка каждый час
+
 function getMoscowTime() {
     return Date.now() + MOSCOW_OFFSET;
 }
@@ -243,6 +247,137 @@ async function deleteKey(key) {
     await saveKeys(keysData);
     console.log(`🗑️ Удалён ключ: ${key}`);
     return { success: true };
+}
+
+// ============ ФУНКЦИИ РАБОТЫ С СЕССИЯМИ ============
+
+function generateSessionId() {
+    return crypto.randomBytes(32).toString('hex');
+}
+
+function getCurrentServerHour() {
+    const now = getMoscowTime();
+    return Math.floor(now / (60 * 60 * 1000));
+}
+
+function getMsUntilNextHour() {
+    const now = getMoscowTime();
+    const nextHour = (Math.floor(now / (60 * 60 * 1000)) + 1) * 60 * 60 * 1000;
+    return nextHour - now;
+}
+
+function cleanupExpiredSessions() {
+    const currentHour = getCurrentServerHour();
+    let deletedCount = 0;
+    for (const [sessionId, session] of activeSessions) {
+        if (session.expires_at_hour !== currentHour) {
+            activeSessions.delete(sessionId);
+            deletedCount++;
+        }
+    }
+    if (deletedCount > 0) {
+        console.log(`🧹 Очищено устаревших сессий: ${deletedCount}`);
+    }
+}
+
+// Запускаем очистку сессий каждый час
+setInterval(cleanupExpiredSessions, SESSION_CLEANUP_INTERVAL);
+
+async function createSession(userId, activationKey) {
+    const currentHour = getCurrentServerHour();
+    const sessionId = generateSessionId();
+
+    activeSessions.set(sessionId, {
+        user_id: userId,
+        activation_key: activationKey,
+        expires_at_hour: currentHour,
+        created_at: getMoscowTime()
+    });
+
+    return {
+        session_id: sessionId,
+        server_hour: currentHour,
+        expires_at_ms: getMsUntilNextHour(),
+        server_timestamp: getMoscowTime()
+    };
+}
+
+async function validateSession(sessionId, userId) {
+    if (!sessionId) return { valid: false, error: 'Missing session_id' };
+
+    const session = activeSessions.get(sessionId);
+    if (!session) {
+        return { valid: false, error: 'Invalid session', need_refresh: true };
+    }
+
+    if (session.user_id !== userId) {
+        return { valid: false, error: 'User mismatch' };
+    }
+
+    const currentHour = getCurrentServerHour();
+    if (session.expires_at_hour !== currentHour) {
+        activeSessions.delete(sessionId);
+        return { valid: false, error: 'Session expired', need_refresh: true };
+    }
+
+    return { valid: true, session: session };
+}
+
+async function refreshSession(oldSessionId, userId, activationKey) {
+    // Проверяем старую сессию
+    const oldSession = activeSessions.get(oldSessionId);
+    if (!oldSession || oldSession.user_id !== userId) {
+        return { success: false, error: 'Invalid old session' };
+    }
+
+    // Удаляем старую сессию
+    activeSessions.delete(oldSessionId);
+
+    // Создаем новую
+    const currentHour = getCurrentServerHour();
+    const newSessionId = generateSessionId();
+
+    activeSessions.set(newSessionId, {
+        user_id: userId,
+        activation_key: activationKey,
+        expires_at_hour: currentHour,
+        created_at: getMoscowTime()
+    });
+
+    return {
+        success: true,
+        session_id: newSessionId,
+        server_hour: currentHour,
+        expires_at_ms: getMsUntilNextHour(),
+        server_timestamp: getMoscowTime()
+    };
+}
+
+// Middleware для проверки сессии
+function verifySessionMiddleware(req, res, next) {
+    const { session_id, from } = req.body;
+
+    if (!session_id) {
+        return res.status(401).json({ error: 'Missing session_id' });
+    }
+
+    const session = activeSessions.get(session_id);
+    if (!session) {
+        return res.status(401).json({ error: 'Invalid session', need_refresh: true });
+    }
+
+    if (session.user_id !== from) {
+        return res.status(401).json({ error: 'User mismatch' });
+    }
+
+    const currentHour = getCurrentServerHour();
+    if (session.expires_at_hour !== currentHour) {
+        activeSessions.delete(session_id);
+        return res.status(401).json({ error: 'Session expired', need_refresh: true });
+    }
+
+    req.session = session;
+    next();
 }
 
 // ============ ФУНКЦИИ РАБОТЫ С ДИАЛОГАМИ ============
@@ -519,18 +654,50 @@ app.post('/api/register', async (req, res) => {
     const { username, key, hwid } = req.body;
     if (!username || username.length < 2) return res.status(400).json({ error: 'Имя должно содержать минимум 2 символа' });
     if (!key || key.length !== 19) return res.status(400).json({ error: 'Неверный формат ключа' });
+
     const result = await checkKey(key, username, hwid);
-    if (result.success) res.json({ success: true, userId: result.userId, username: result.username, expiresAt: result.expiresAt });
-    else res.status(401).json({ error: result.error });
+    if (result.success) {
+        // Создаем сессию
+        const sessionData = await createSession(result.userId, key);
+
+        res.json({
+            success: true,
+            userId: result.userId,
+            username: result.username,
+            expiresAt: result.expiresAt,
+            session_id: sessionData.session_id,
+            server_hour: sessionData.server_hour,
+            expires_at_ms: sessionData.expires_at_ms,
+            server_timestamp: sessionData.server_timestamp
+        });
+    } else {
+        res.status(401).json({ error: result.error });
+    }
 });
 
 app.post('/api/activate', async (req, res) => {
     const { username, key, hwid } = req.body;
     if (!username || username.length < 2) return res.status(400).json({ error: 'Имя должно содержать минимум 2 символа' });
     if (!key || key.length !== 19) return res.status(400).json({ error: 'Неверный формат ключа' });
+
     const result = await activateKey(key, username, hwid);
-    if (result.success) res.json({ success: true, userId: result.userId, username: username, expiresAt: result.expiresAt });
-    else res.status(401).json({ error: result.error });
+    if (result.success) {
+        // Создаем сессию
+        const sessionData = await createSession(result.userId, key);
+
+        res.json({
+            success: true,
+            userId: result.userId,
+            username: username,
+            expiresAt: result.expiresAt,
+            session_id: sessionData.session_id,
+            server_hour: sessionData.server_hour,
+            expires_at_ms: sessionData.expires_at_ms,
+            server_timestamp: sessionData.server_timestamp
+        });
+    } else {
+        res.status(401).json({ error: result.error });
+    }
 });
 
 app.post('/api/find_user', async (req, res) => {
@@ -549,9 +716,12 @@ app.post('/api/find_user', async (req, res) => {
     else res.json({ success: false, error: 'Пользователь не найден' });
 });
 
-app.post('/api/create_dialog', async (req, res) => {
-    const { user1, user2 } = req.body;
+app.post('/api/create_dialog', verifySessionMiddleware, async (req, res) => {
+    const { user2 } = req.body;
+    const user1 = req.session.user_id;
+
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
+
     const result = await createEmptyDialog(user1, user2);
     res.json(result);
 });
@@ -562,9 +732,10 @@ app.get('/api/dialog_exists/:userId/:chatId', async (req, res) => {
     res.json(result);
 });
 
-app.post('/api/send', async (req, res) => {
+app.post('/api/send', verifySessionMiddleware, async (req, res) => {
     const { from, to, text, is_image, image_data } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'Недостаточно данных' });
+
     const messageId = Date.now();
     const message = {
         id: messageId,
@@ -575,14 +746,17 @@ app.post('/api/send', async (req, res) => {
         image_data: is_image ? image_data : null,
         timestamp: Math.floor(getMoscowTime() / 1000)
     };
+
     const dialogTo = await getDialog(from, to);
     dialogTo.messages.push(message);
     if (dialogTo.messages.length > 100) dialogTo.messages = dialogTo.messages.slice(-100);
     await saveDialog(from, to, dialogTo);
+
     const dialogFrom = await getDialog(to, from);
     dialogFrom.messages.push(message);
     if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
     await saveDialog(to, from, dialogFrom);
+
     console.log(`📨 ${from} -> ${to}: ${is_image ? '[Изображение]' : text.substring(0, 50)}`);
     res.json({ success: true, message: message });
 });
@@ -642,9 +816,12 @@ app.get('/api/dialog_info/:userId/:chatId', async (req, res) => {
     });
 });
 
-app.delete('/api/delete_dialog', async (req, res) => {
-    const { user1, user2 } = req.body;
+app.delete('/api/delete_dialog', verifySessionMiddleware, async (req, res) => {
+    const { user2 } = req.body;
+    const user1 = req.session.user_id;
+
     if (!user1 || !user2) return res.status(400).json({ error: 'Недостаточно данных' });
+
     const result = await deleteDialog(user1, user2);
     if (result.success) res.json({ success: true });
     else res.status(404).json({ error: 'Диалог не найден' });
@@ -722,7 +899,45 @@ app.get('/api/user_dialogs/:userId', async (req, res) => {
     }
 });
 
+app.post('/api/refresh_session', async (req, res) => {
+    const { old_session_id, user_id, activation_key } = req.body;
+
+    if (!old_session_id || !user_id || !activation_key) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Сначала проверяем, что ключ все еще активен
+    const checkResult = await checkKey(activation_key, null, null);
+    if (!checkResult.success) {
+        return res.status(401).json({ error: 'Activation key expired or invalid', need_full_reconnect: true });
+    }
+
+    const result = await refreshSession(old_session_id, user_id, activation_key);
+
+    if (result.success) {
+        res.json({
+            success: true,
+            session_id: result.session_id,
+            server_hour: result.server_hour,
+            expires_at_ms: result.expires_at_ms,
+            server_timestamp: result.server_timestamp
+        });
+    } else {
+        res.status(401).json({ error: result.error, need_full_reconnect: true });
+    }
+});
+
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
+
+app.get('/api/check_session', verifySessionMiddleware, async (req, res) => {
+    res.json({
+        valid: true,
+        user_id: req.session.user_id,
+        expires_at_hour: req.session.expires_at_hour,
+        server_hour: getCurrentServerHour(),
+        ms_until_next_hour: getMsUntilNextHour()
+    });
+});
 
 // ============ ЗАПУСК ============
 async function start() {
