@@ -606,7 +606,6 @@
             width: auto;
         }
 
-        /* Стили для таблицы сессий */
         .sessions-stats {
             display: flex;
             gap: 20px;
@@ -652,7 +651,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Форма входа -->
         <div id="loginContainer" class="login-container">
             <div class="login-box">
                 <h1>🔐 Админ панель</h1>
@@ -663,7 +661,6 @@
             </div>
         </div>
 
-        <!-- Основная админка -->
         <div id="adminContainer" class="admin-container">
             <div class="header">
                 <div class="header-actions">
@@ -675,7 +672,6 @@
                 <div id="serverStatus" style="margin-top: 10px; font-size: 12px; color: #888;"></div>
             </div>
 
-            <!-- Статистика -->
             <div class="stats" id="stats">
                 <div class="stat-card">
                     <div class="stat-number" id="totalKeys">0</div>
@@ -691,7 +687,6 @@
                 </div>
             </div>
 
-            <!-- Вкладки -->
             <div class="tabs">
                 <div class="tab active" data-tab="keys">🔑 Ключи</div>
                 <div class="tab" data-tab="notifications">📢 Уведомления</div>
@@ -699,7 +694,6 @@
                 <div class="tab" data-tab="settings">⚙️ Настройки</div>
             </div>
 
-            <!-- Вкладка Ключи -->
             <div id="tabKeys" class="panel">
                 <h2>🎫 Генерация ключа</h2>
                 <div class="form-row">
@@ -742,13 +736,12 @@
                             </tr>
                         </thead>
                         <tbody id="keysTableBody">
-                            <tr><td colspan="11">Загрузка...</td></tr>
+                            <tr><td colspan="11">Загрузка...<\/td><\/tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Вкладка Уведомления -->
             <div id="tabNotifications" class="panel" style="display: none;">
                 <h2>📢 Отправить уведомление</h2>
                 <div class="form-group">
@@ -766,7 +759,6 @@
                 <div id="notificationsList"></div>
             </div>
 
-            <!-- Вкладка Сессии -->
             <div id="tabSessions" class="panel" style="display: none;">
                 <h2>🔐 Активные сессии</h2>
                 <div id="sessionsStats" class="sessions-stats"></div>
@@ -785,13 +777,12 @@
                             </tr>
                         </thead>
                         <tbody id="sessionsTableBody">
-                            <tr><td colspan="8" style="text-align: center;">Загрузка...</td></tr>
+                            <tr><td colspan="8" style="text-align: center;">Загрузка...<\/td><\/tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Вкладка Настройки -->
             <div id="tabSettings" class="panel" style="display: none;">
                 <h2>⚙️ Настройки сервера</h2>
                 <div class="settings-row">
@@ -820,7 +811,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно редактирования ключа -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <h3>✏️ Редактирование ключа</h3>
@@ -881,7 +871,6 @@
             return `${days} дн.`;
         }
 
-        // Обновить текущую вкладку
         function refreshCurrentTab() {
             if (currentTab === 'keys') {
                 loadKeys();
@@ -895,7 +884,6 @@
             }
         }
 
-        // Переключение вкладок
         function switchTab(tab) {
             currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -922,52 +910,65 @@
             }
         }
 
-        // Загрузка сессий
+        // Исправленная функция загрузки сессий через JSON API
         async function loadSessions() {
             const tbody = document.getElementById('sessionsTableBody');
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Загрузка...</td></tr>';
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Загрузка...<\/td><\/tr>';
 
             try {
-                const response = await fetch('/sessions');
-                const html = await response.text();
+                const response = await fetch('/api/admin/sessions_data');
+                const data = await response.json();
 
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+                const statsContainer = document.getElementById('sessionsStats');
+                if (statsContainer) {
+                    statsContainer.innerHTML = `
+                        <div class="sessions-stat-card">
+                            <div class="sessions-stat-number">${data.total_sessions || 0}</div>
+                            <div class="sessions-stat-label">Всего сессий</div>
+                        </div>
+                        <div class="sessions-stat-card">
+                            <div class="sessions-stat-number">${data.valid_sessions || 0}</div>
+                            <div class="sessions-stat-label">Валидных</div>
+                        </div>
+                        <div class="sessions-stat-card">
+                            <div class="sessions-stat-number">${data.invalid_sessions || 0}</div>
+                            <div class="sessions-stat-label">Истекших</div>
+                        </div>
+                        <div class="sessions-stat-card">
+                            <div class="sessions-stat-number">${data.current_server_hour || 0}</div>
+                            <div class="sessions-stat-label">Текущий час сервера</div>
+                        </div>
+                    `;
+                }
 
-                const statsDiv = doc.querySelector('.stats');
-                const statsHtml = statsDiv ? statsDiv.innerHTML : '';
-                document.getElementById('sessionsStats').innerHTML = statsHtml;
+                const sessions = data.sessions || [];
 
-                const rows = doc.querySelectorAll('table tbody tr');
-
-                if (rows.length === 0 || (rows.length === 1 && rows[0].innerText.includes('Нет активных сессий'))) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Нет активных сессий</td>' + '</tr>';
+                if (sessions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Нет активных сессий<\/td><\/tr>';
                     return;
                 }
 
                 let sessionsHtml = '';
-                for (const row of rows) {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 8) {
-                        const isValid = cells[4]?.innerText.includes('Валидна');
-                        sessionsHtml += `
-                            <tr>
-                                <td>${cells[0]?.innerHTML || '—'}</td>
-                                <td>${cells[1]?.innerHTML || '—'}</td>
-                                <td>${cells[2]?.innerHTML || '—'}</td>
-                                <td>${cells[3]?.innerHTML || '—'}</td>
-                                <td class="${isValid ? 'session-valid' : 'session-invalid'}">${cells[4]?.innerHTML || '—'}</td>
-                                <td>${cells[5]?.innerHTML || '—'}</td>
-                                <td>${cells[6]?.innerHTML || '—'}</td>
-                                <td>${cells[7]?.innerHTML || '—'}</td>
-                            </tr>
-                        `;
-                    }
+                for (const s of sessions) {
+                    sessionsHtml += `
+                        <tr>
+                            <td><span class="session-id-cell">${escapeHtml(s.user_id || '—')}</span><\/td>
+                            <td>${escapeHtml(s.username || '—')}<\/td>
+                            <td><span class="session-id-cell">${escapeHtml(s.activation_key_short || '—')}</span><\/td>
+                            <td><span class="session-id-cell" title="${escapeHtml(s.session_id_full || '')}">${escapeHtml(s.session_id_short || '—')}</span><\/td>
+                            <td class="${s.is_valid ? 'session-valid' : 'session-invalid'}">${s.is_valid ? '✅ Валидна' : '❌ Истекла'}<\/td>
+                            <td>${escapeHtml(s.created_at || '—')}<\/td>
+                            <td>${s.created_ago_minutes || 0} мин.<\/td>
+                            <td>${s.is_valid ? (s.will_expire_in_minutes > 0 ? s.will_expire_in_minutes + ' мин.' : 'менее минуты') : 'истекла'}<\/td>
+                        </tr>
+                    `;
                 }
                 tbody.innerHTML = sessionsHtml;
+
             } catch (error) {
                 console.error('Ошибка загрузки сессий:', error);
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Ошибка загрузки сессий</td>' + '<tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Ошибка загрузки сессий<\/td><\/tr>';
             }
         }
 
@@ -1105,31 +1106,31 @@
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td><span class="key-code">${keyData.key}</span></td>
-                    <td title="${formatFullDate(keyData.created_at)}">${formatDateOnly(keyData.created_at)}</td>
-                    <td>${keyData.days_valid}</td>
+                    <td title="${formatFullDate(keyData.created_at)}">${formatDateOnly(keyData.created_at)}<\/td>
+                    <td>${keyData.days_valid}<\/td>
                     <td class="${isActive ? 'status-active' : (isExpired ? 'status-expired' : 'status-inactive')}">
                         ${isActive ? '✅ Активен' : (isExpired ? '⛔ Истёк' : '⚪ Не активирован')}
-                    </td>
+                    <\/td>
                     <td title="${keyData.activated_at ? formatFullDate(keyData.activated_at) : '—'}">
                         ${keyData.activated_at ? formatDateOnly(keyData.activated_at) : '—'}
-                    </td>
+                    <\/td>
                     <td title="${keyData.expires_at ? formatFullDate(keyData.expires_at) : '—'}">
                         ${keyData.expires_at ? formatDateOnly(keyData.expires_at) + ' (' + getDaysLeft(keyData.expires_at) + ')' : '—'}
-                    </td>
-                    <td class="user-line">${usernames}</td>
-                    <td class="user-line">${userIds}</td>
-                    <td class="user-line" style="font-family: monospace; font-size: 11px;">${hwids}</td>
-                    <td>${keyData.activations_left !== undefined ? keyData.activations_left : (keyData.users ? 2 - keyData.users.length : 2)}</td>
+                    <\/td>
+                    <td class="user-line">${usernames}<\/td>
+                    <td class="user-line">${userIds}<\/td>
+                    <td class="user-line" style="font-family: monospace; font-size: 11px;">${hwids}<\/td>
+                    <td>${keyData.activations_left !== undefined ? keyData.activations_left : (keyData.users ? 2 - keyData.users.length : 2)}<\/td>
                     <td style="white-space: nowrap;">
-                        <button class="btn-small btn-warning" onclick="editKey('${keyData.key}')">✏️ Ред.</button>
-                        <button class="btn-small btn-secondary" onclick="resetKey('${keyData.key}')">🔄 Сброс</button>
-                        <button class="btn-small btn-danger" onclick="deleteKey('${keyData.key}')">🗑️ Удал.</button>
-                    </td>
+                        <button class="btn-small btn-warning" onclick="editKey('${keyData.key}')">✏️ Ред.<\/button>
+                        <button class="btn-small btn-secondary" onclick="resetKey('${keyData.key}')">🔄 Сброс<\/button>
+                        <button class="btn-small btn-danger" onclick="deleteKey('${keyData.key}')">🗑️ Удал.<\/button>
+                    <\/td>
                 `;
             }
 
             if (keysArray.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11">Ключи не найдены</td>' + '</tr>';
+                tbody.innerHTML = '<td><td colspan="11">Ключи не найдены<\/td><\/tr>';
             }
         }
 
@@ -1530,7 +1531,6 @@
             return div.innerHTML;
         }
 
-        // Назначение обработчиков вкладок
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => switchTab(tab.dataset.tab));
         });
