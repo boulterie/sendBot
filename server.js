@@ -929,13 +929,35 @@ app.post('/api/refresh_session', async (req, res) => {
 
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
 
-app.get('/api/check_session', verifySessionMiddleware, async (req, res) => {
+// ============ АДМИНСКИЙ ЭНДПОИНТ ДЛЯ ПРОСМОТРА СЕССИЙ ============
+app.get('/api/admin/sessions', async (req, res) => {
+    // Проверяем админский пароль через заголовок
+    const adminPassword = req.headers['x-admin-password'];
+    if (adminPassword !== ADMIN_PASSWORD) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const sessions = [];
+    const currentHour = getCurrentServerHour();
+    const now = getMoscowTime();
+
+    for (const [sessionId, session] of activeSessions) {
+        sessions.push({
+            session_id: sessionId.substring(0, 16) + '...', // Показываем только часть для безопасности
+            user_id: session.user_id,
+            activation_key: session.activation_key ? session.activation_key.substring(0, 10) + '...' : null,
+            expires_at_hour: session.expires_at_hour,
+            is_valid: session.expires_at_hour === currentHour,
+            created_at: new Date(session.created_at).toLocaleString('ru-RU'),
+            time_left_hours: (session.expires_at_hour - currentHour),
+            created_ago_minutes: Math.floor((now - session.created_at) / 60000)
+        });
+    }
+
     res.json({
-        valid: true,
-        user_id: req.session.user_id,
-        expires_at_hour: req.session.expires_at_hour,
-        server_hour: getCurrentServerHour(),
-        ms_until_next_hour: getMsUntilNextHour()
+        total_sessions: sessions.length,
+        current_server_hour: currentHour,
+        sessions: sessions
     });
 });
 
