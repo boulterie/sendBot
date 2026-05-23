@@ -657,7 +657,7 @@ app.post('/api/register', async (req, res) => {
 
     const result = await checkKey(key, username, hwid);
     if (result.success) {
-        // Создаем сессию
+        // СОЗДАЕМ СЕССИЮ - ЭТО БЫЛО ПРОПУЩЕНО!
         const sessionData = await createSession(result.userId, key);
 
         res.json({
@@ -682,7 +682,6 @@ app.post('/api/activate', async (req, res) => {
 
     const result = await activateKey(key, username, hwid);
     if (result.success) {
-        // Создаем сессию
         const sessionData = await createSession(result.userId, key);
 
         res.json({
@@ -929,36 +928,227 @@ app.post('/api/refresh_session', async (req, res) => {
 
 app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'admin.html')); });
 
-// ============ АДМИНСКИЙ ЭНДПОИНТ ДЛЯ ПРОСМОТРА СЕССИЙ ============
-app.get('/api/admin/sessions', async (req, res) => {
-    // Проверяем админский пароль через заголовок
-    const adminPassword = req.headers['x-admin-password'];
-    if (adminPassword !== ADMIN_PASSWORD) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-
+// ============ СТРАНИЦА ДЛЯ ПРОСМОТРА СЕССИЙ ============
+app.get('/sessions', async (req, res) => {
     const sessions = [];
     const currentHour = getCurrentServerHour();
     const now = getMoscowTime();
 
+    // Собираем данные о пользователях из ключей
+    const keysData = await getAllKeys();
+
     for (const [sessionId, session] of activeSessions) {
+        // Ищем имя пользователя по user_id
+        let username = null;
+        let activationKeyFull = null;
+
+        for (const [key, keyData] of Object.entries(keysData.keys)) {
+            for (const user of keyData.users) {
+                if (user.user_id === session.user_id) {
+                    username = user.username;
+                    activationKeyFull = key;
+                    break;
+                }
+            }
+            if (username) break;
+        }
+
         sessions.push({
-            session_id: sessionId.substring(0, 16) + '...', // Показываем только часть для безопасности
+            session_id_full: sessionId,
+            session_id_short: sessionId.substring(0, 16) + '...',
             user_id: session.user_id,
-            activation_key: session.activation_key ? session.activation_key.substring(0, 10) + '...' : null,
+            username: username || 'Unknown',
+            activation_key: session.activation_key || activationKeyFull,
+            activation_key_short: (session.activation_key || activationKeyFull || '').substring(0, 16) + '...',
             expires_at_hour: session.expires_at_hour,
             is_valid: session.expires_at_hour === currentHour,
             created_at: new Date(session.created_at).toLocaleString('ru-RU'),
+            created_at_timestamp: session.created_at,
             time_left_hours: (session.expires_at_hour - currentHour),
-            created_ago_minutes: Math.floor((now - session.created_at) / 60000)
+            created_ago_minutes: Math.floor((now - session.created_at) / 60000),
+            will_expire_in_minutes: session.expires_at_hour === currentHour
+                ? Math.floor(((session.expires_at_hour + 1) * 60 * 60 * 1000 - now) / 60000)
+                : 0
         });
     }
 
-    res.json({
-        total_sessions: sessions.length,
-        current_server_hour: currentHour,
-        sessions: sessions
-    });
+    // Сортируем по времени создания (новые сверху)
+    sessions.sort((a, b) => b.created_at_timestamp - a.created_at_timestamp);
+
+    const html = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Активные сессии - Мессенджер</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f12 0%, #1a1a1f 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #fff, #4CAF50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(30,30,35,0.95);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .stat-label {
+            color: #888;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(30,30,35,0.95);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th {
+            background: rgba(20,20,25,0.9);
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        .valid-true {
+            color: #4CAF50;
+        }
+        .valid-false {
+            color: #ff6b6b;
+        }
+        .session-id {
+            font-family: monospace;
+            font-size: 12px;
+            background: rgba(0,0,0,0.3);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+        .refresh-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background: #2e7d32;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Активные сессии</h1>
+        <div class="subtitle">Текущие сессии пользователей на сервере</div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">${sessions.length}</div>
+                <div class="stat-label">Всего сессий</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${sessions.filter(s => s.is_valid).length}</div>
+                <div class="stat-label">Валидных</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${sessions.filter(s => !s.is_valid).length}</div>
+                <div class="stat-label">Истекших (будут удалены)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${currentHour}</div>
+                <div class="stat-label">Текущий час сервера</div>
+            </div>
+        </div>
+
+        <button class="refresh-btn" onclick="location.reload()">🔄 Обновить</button>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Имя пользователя</th>
+                    <th>Ключ активации</th>
+                    <th>Session ID</th>
+                    <th>Статус</th>
+                    <th>Создана</th>
+                    <th>Живет минут</th>
+                    <th>Истекает через</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${sessions.map(s => `
+                    <tr>
+                        <td><span class="session-id">${s.user_id}</span></td>
+                        <td>${s.username}</td>
+                        <td><span class="session-id">${s.activation_key_short}</span></td>
+                        <td><span class="session-id" title="${s.session_id_full}">${s.session_id_short}</span></td>
+                        <td class="${s.is_valid ? 'valid-true' : 'valid-false'}">${s.is_valid ? '✅ Валидна' : '❌ Истекла'}</td>
+                        <td>${s.created_at}</td>
+                        <td>${s.created_ago_minutes} мин.</td>
+                        <td>${s.is_valid ? (s.will_expire_in_minutes > 0 ? s.will_expire_in_minutes + ' мин.' : 'менее минуты') : 'истекла'}</td>
+                    </tr>
+                `).join('')}
+                ${sessions.length === 0 ? '<tr><td colspan="8" style="text-align: center; padding: 40px;">Нет активных сессий</td></tr>' : ''}
+            </tbody>
+        </table>
+        <div class="footer">
+            🔄 Сессии автоматически очищаются при смене часа | 🕐 Серверное время: ${new Date(getMoscowTime()).toLocaleString('ru-RU')}
+        </div>
+    </div>
+</body>
+</html>
+    `;
+    
+    res.send(html);
 });
 
 // ============ ЗАПУСК ============
