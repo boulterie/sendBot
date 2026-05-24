@@ -473,7 +473,6 @@ async function addNotification(title, message, sender = 'admin') {
     notificationsData.notifications.unshift(notification);
     if (notificationsData.notifications.length > 200) notificationsData.notifications = notificationsData.notifications.slice(0, 200);
     await saveNotifications(notificationsData);
-    console.log(`📢 Уведомление: ${title}`);
     return notification;
 }
 
@@ -703,15 +702,11 @@ app.post('/api/send', verifySessionMiddleware, async (req, res) => {
         timestamp: Math.floor(getMoscowTime() / 1000)
     };
 
-    const dialogTo = await getDialog(from, to);
-    dialogTo.messages.push(message);
-    if (dialogTo.messages.length > 100) dialogTo.messages = dialogTo.messages.slice(-100);
-    await saveDialog(from, to, dialogTo);
-
-    const dialogFrom = await getDialog(to, from);
-    dialogFrom.messages.push(message);
-    if (dialogFrom.messages.length > 100) dialogFrom.messages = dialogFrom.messages.slice(-100);
-    await saveDialog(to, from, dialogFrom);
+    // Сохраняем один раз (файл один на двоих: [from, to].sort().join('_'))
+    const dialog = await getDialog(from, to);
+    dialog.messages.push(message);
+    if (dialog.messages.length > 100) dialog.messages = dialog.messages.slice(-100);
+    await saveDialog(from, to, dialog);
 
     res.json({ success: true, message: message });
 });
@@ -939,7 +934,6 @@ async function start() {
         console.log(`🚀 Сервер запущен!`);
         console.log(`${'='.repeat(50)}`);
         console.log(`📡 Порт: ${PORT}`);
-        console.log(`🔐 Админ панель: https://msgsendlerpro.bothost.tech/`);
         console.log(`🕐 Часовой пояс: MSK (UTC+3)`);
         console.log(`${'='.repeat(50)}\n`);
     });
